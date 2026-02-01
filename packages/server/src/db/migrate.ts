@@ -73,6 +73,25 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
     `,
   },
+  {
+    name: '005_add_game_version',
+    up: `
+      ALTER TABLE games ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1 NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_games_version ON games(version);
+    `,
+  },
+  {
+    name: '006_create_score_acceptances',
+    up: `
+      CREATE TABLE IF NOT EXISTS score_acceptances (
+        game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+        player_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        accepted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        PRIMARY KEY (game_id, player_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_score_acceptances_game ON score_acceptances(game_id);
+    `,
+  },
 ];
 
 async function migrate() {

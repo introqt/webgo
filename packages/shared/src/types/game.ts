@@ -73,6 +73,7 @@ export interface Game {
     black: number;
     white: number;
   } | null;
+  version: number; // For optimistic locking
   createdAt: Date;
   updatedAt: Date;
 }

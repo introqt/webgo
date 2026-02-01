@@ -99,6 +99,7 @@ export class GameService {
       winner: null,
       winReason: null,
       finalScore: null,
+      version: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -157,6 +158,32 @@ export class GameService {
   }
 
   /**
+   * Retry wrapper for operations with optimistic locking
+   */
+  private async withRetry<T>(
+    operation: () => Promise<{ success: boolean; error?: string } & T>,
+    maxAttempts = 3
+  ): Promise<{ success: boolean; error?: string } & T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const result = await operation();
+      
+      if (result.success || result.error !== 'Concurrent modification detected') {
+        return result;
+      }
+      
+      if (attempt < maxAttempts) {
+        // Wait briefly before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 10 * Math.pow(2, attempt - 1)));
+      }
+    }
+    
+    return {
+      success: false,
+      error: 'Operation failed after multiple attempts due to concurrent modifications',
+    } as { success: boolean; error?: string } & T;
+  }
+
+  /**
    * Make a move in the game
    */
   async makeMove(
@@ -164,122 +191,134 @@ export class GameService {
     playerId: string,
     position: Position
   ): Promise<MakeMoveResult> {
-    const game = await this.gameRepo.findById(gameId);
-    if (!game) {
-      return { success: false, error: 'Game not found' };
-    }
+    return this.withRetry(async () => {
+      const game = await this.gameRepo.findById(gameId);
+      if (!game) {
+        return { success: false, error: 'Game not found' };
+      }
 
-    if (game.status !== 'active') {
-      return { success: false, error: 'Game is not active' };
-    }
+      if (game.status !== 'active') {
+        return { success: false, error: 'Game is not active' };
+      }
 
-    // Determine player's color
-    const playerColor = this.getPlayerColor(game, playerId);
-    if (!playerColor) {
-      return { success: false, error: 'Player not in game' };
-    }
+      // Determine player's color
+      const playerColor = this.getPlayerColor(game, playerId);
+      if (!playerColor) {
+        return { success: false, error: 'Player not in game' };
+      }
 
-    // Check if it's the player's turn
-    if (game.gameState.board.currentTurn !== playerColor) {
-      return { success: false, error: 'Not your turn' };
-    }
+      // Check if it's the player's turn
+      if (game.gameState.board.currentTurn !== playerColor) {
+        return { success: false, error: 'Not your turn' };
+      }
 
-    // Attempt the move
-    const result = GameEngine.makeMove(game.gameState.board, position, playerColor);
-    if (!result.valid) {
-      return { success: false, error: result.reason };
-    }
+      // Attempt the move
+      const result = GameEngine.makeMove(game.gameState.board, position, playerColor);
+      if (!result.valid) {
+        return { success: false, error: result.reason };
+      }
 
-    // Update game state
-    game.gameState.board = result.newState;
+      // Update game state
+      game.gameState.board = result.newState;
 
-    // Record the move
-    const move: Move = {
-      gameId,
-      playerId,
-      moveNumber: game.gameState.moveHistory.length + 1,
-      color: playerColor,
-      position,
-      capturedStones: result.capturedStones,
-      isPass: false,
-      createdAt: new Date(),
-    };
-    game.gameState.moveHistory.push(move);
-    game.updatedAt = new Date();
+      // Record the move
+      const move: Move = {
+        gameId,
+        playerId,
+        moveNumber: game.gameState.moveHistory.length + 1,
+        color: playerColor,
+        position,
+        capturedStones: result.capturedStones,
+        isPass: false,
+        createdAt: new Date(),
+      };
+      game.gameState.moveHistory.push(move);
+      game.updatedAt = new Date();
 
-    await this.gameRepo.update(game);
-    await this.gameRepo.saveMove(move);
+      const updated = await this.gameRepo.update(game);
+      if (!updated) {
+        return { success: false, error: 'Concurrent modification detected' };
+      }
 
-    return {
-      success: true,
-      capturedStones: result.capturedStones,
-      gameState: GameEngine.serializeGameState(game.gameState),
-    };
+      await this.gameRepo.saveMove(move);
+
+      return {
+        success: true,
+        capturedStones: result.capturedStones,
+        gameState: GameEngine.serializeGameState(game.gameState),
+      };
+    });
   }
 
   /**
    * Pass turn
    */
   async passTurn(gameId: string, playerId: string): Promise<MakeMoveResult> {
-    const game = await this.gameRepo.findById(gameId);
-    if (!game) {
-      return { success: false, error: 'Game not found' };
-    }
+    return this.withRetry(async () => {
+      const game = await this.gameRepo.findById(gameId);
+      if (!game) {
+        return { success: false, error: 'Game not found' };
+      }
 
-    if (game.status !== 'active') {
-      return { success: false, error: 'Game is not active' };
-    }
+      if (game.status !== 'active') {
+        return { success: false, error: 'Game is not active' };
+      }
 
-    const playerColor = this.getPlayerColor(game, playerId);
-    if (!playerColor) {
-      return { success: false, error: 'Player not in game' };
-    }
+      const playerColor = this.getPlayerColor(game, playerId);
+      if (!playerColor) {
+        return { success: false, error: 'Player not in game' };
+      }
 
-    if (game.gameState.board.currentTurn !== playerColor) {
-      return { success: false, error: 'Not your turn' };
-    }
+      if (game.gameState.board.currentTurn !== playerColor) {
+        return { success: false, error: 'Not your turn' };
+      }
 
-    // Execute pass
-    game.gameState.board = GameEngine.pass(game.gameState.board);
+      // Execute pass
+      game.gameState.board = GameEngine.pass(game.gameState.board);
 
-    // Record the pass
-    const move: Move = {
-      gameId,
-      playerId,
-      moveNumber: game.gameState.moveHistory.length + 1,
-      color: playerColor,
-      position: null,
-      capturedStones: [],
-      isPass: true,
-      createdAt: new Date(),
-    };
-    game.gameState.moveHistory.push(move);
-    game.updatedAt = new Date();
+      // Record the pass
+      const move: Move = {
+        gameId,
+        playerId,
+        moveNumber: game.gameState.moveHistory.length + 1,
+        color: playerColor,
+        position: null,
+        capturedStones: [],
+        isPass: true,
+        createdAt: new Date(),
+      };
+      game.gameState.moveHistory.push(move);
+      game.updatedAt = new Date();
 
-    // Check for game end (two consecutive passes)
-    let gameEnded = false;
-    let gameResult: GameResult | undefined;
+      // Check for game end (two consecutive passes)
+      let gameEnded = false;
+      let gameResult: GameResult | undefined;
 
-    if (GameEngine.shouldEndGame(game.gameState.board)) {
-      game.status = 'scoring';
-      // Calculate preliminary territory
-      game.gameState.territory = GameEngine.calculateTerritory(
-        game.gameState.board.stones,
-        game.gameState.board.size,
-        []
-      );
-    }
+      if (GameEngine.shouldEndGame(game.gameState.board)) {
+        game.status = 'scoring';
+        // Calculate preliminary territory
+        game.gameState.territory = GameEngine.calculateTerritory(
+          game.gameState.board.stones,
+          game.gameState.board.size,
+          []
+        );
+      }
 
-    await this.gameRepo.update(game);
-    await this.gameRepo.saveMove(move);
+      const updated = await this.gameRepo.update(game);
+      if (!updated) {
+        return { success: false, error: 'Concurrent modification detected' };
+      }
 
-    return {
-      success: true,
-      capturedStones: [],
-      gameState: GameEngine.serializeGameState(game.gameState),
-      gameEnded,
-      gameResult,
-    };
+      await this.gameRepo.saveMove(move);
+
+      return {
+        success: true,
+        capturedStones: [],
+        gameState: GameEngine.serializeGameState(game.gameState),
+        gameEnded,
+        gameResult,
+      };
+    });
   }
 
   /**
@@ -345,6 +384,23 @@ export class GameService {
 
     // Toggle dead stone marking
     for (const pos of positions) {
+      // Validate position is within bounds
+      if (pos.x < 0 || pos.x >= game.boardSize || pos.y < 0 || pos.y >= game.boardSize) {
+        return {
+          success: false,
+          error: `Invalid position (${pos.x}, ${pos.y}): out of bounds for ${game.boardSize}x${game.boardSize} board`,
+        };
+      }
+
+      // Validate position contains a stone
+      const key = `${pos.x},${pos.y}`;
+      if (!game.gameState.board.stones.has(key)) {
+        return {
+          success: false,
+          error: `Invalid position (${pos.x}, ${pos.y}): no stone at this position`,
+        };
+      }
+
       const isMarked = GameEngine.positionInList(pos, game.gameState.deadStones);
       if (isMarked) {
         game.gameState.deadStones = game.gameState.deadStones.filter(

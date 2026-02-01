@@ -26,6 +26,7 @@ interface GameRow {
   winner: string | null;
   win_reason: string | null;
   final_score: { black: number; white: number } | null;
+  version: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -142,10 +143,10 @@ export class GameRepository {
     });
   }
 
-  async update(game: Game): Promise<void> {
+  async update(game: Game): Promise<boolean> {
     const serializedState = GameEngine.serializeGameState(game.gameState);
 
-    await query(
+    const result = await query(
       `UPDATE games SET
         black_player_id = $2,
         white_player_id = $3,
@@ -154,8 +155,9 @@ export class GameRepository {
         winner = $6,
         win_reason = $7,
         final_score = $8,
+        version = version + 1,
         updated_at = NOW()
-       WHERE id = $1`,
+       WHERE id = $1 AND version = $9`,
       [
         game.id,
         game.blackPlayerId,
@@ -165,8 +167,11 @@ export class GameRepository {
         game.winner,
         game.winReason,
         game.finalScore ? JSON.stringify(game.finalScore) : null,
+        game.version,
       ]
     );
+
+    return result.rowCount !== null && result.rowCount > 0;
   }
 
   async saveMove(move: Move): Promise<void> {
@@ -212,6 +217,7 @@ export class GameRepository {
       winner: row.winner as StoneColor | 'draw' | null,
       winReason: row.win_reason as 'resignation' | 'score' | 'timeout' | null,
       finalScore: row.final_score,
+      version: row.version,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

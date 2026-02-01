@@ -29,7 +29,9 @@ services:
       DB_NAME: webgo
       DB_USER: postgres
       DB_PASSWORD: postgres
-      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
+      # CRITICAL: Set a strong JWT_SECRET before deploying
+      # Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
     ports:
       - "3000:3000"

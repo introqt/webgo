@@ -7,22 +7,30 @@ import type {
 import { GameService } from '../services/game/index.js';
 import { GameRepository } from '../models/Game.js';
 import { UserRepository } from '../models/User.js';
+import { ScoreAcceptanceRepository } from '../models/ScoreAcceptance.js';
 import { AuthService, TokenPayload } from '../services/auth/index.js';
 import { GameEngine } from '../services/game/GameEngine.js';
 
 const gameRepo = new GameRepository();
 const userRepo = new UserRepository();
+const scoreRepo = new ScoreAcceptanceRepository();
 const gameService = new GameService(gameRepo);
 const authService = new AuthService(userRepo);
-
-// Track which users have accepted score in each game
-const scoreAcceptances = new Map<string, Set<string>>();
 
 // Socket with user data
 interface AuthenticatedSocket extends Socket<ClientToServerEvents, ServerToClientEvents> {
   data: {
     user?: TokenPayload;
   };
+}
+
+/**
+ * Check if user is a participant in the game
+ */
+async function isGameParticipant(gameId: string, userId: string): Promise<boolean> {
+  const game = await gameRepo.findById(gameId);
+  if (!game) return false;
+  return game.blackPlayerId === userId || game.whitePlayerId === userId;
 }
 
 export function setupGameHandlers(
@@ -102,6 +110,12 @@ export function setupGameHandlers(
     // Make a move
     socket.on('make_move', async ({ gameId, x, y }) => {
       try {
+        // Authorization: Only participants can make moves
+        if (!await isGameParticipant(gameId, user.userId)) {
+          socket.emit('error', { code: 'UNAUTHORIZED', message: 'Only game participants can make moves' });
+          return;
+        }
+
         const result = await gameService.makeMove(gameId, user.userId, { x, y });
 
         if (!result.success) {
@@ -137,6 +151,12 @@ export function setupGameHandlers(
     // Pass turn
     socket.on('pass_turn', async ({ gameId }) => {
       try {
+        // Authorization: Only participants can pass
+        if (!await isGameParticipant(gameId, user.userId)) {
+          socket.emit('error', { code: 'UNAUTHORIZED', message: 'Only game participants can pass' });
+          return;
+        }
+
         const result = await gameService.passTurn(gameId, user.userId);
 
         if (!result.success) {
@@ -160,7 +180,7 @@ export function setupGameHandlers(
 
         // Check if scoring phase started
         if (game.status === 'scoring') {
-          scoreAcceptances.set(gameId, new Set());
+          await scoreRepo.clearAcceptances(gameId);
           io.to(gameId).emit('scoring_started', {
             gameState: result.gameState!,
           });
@@ -174,6 +194,12 @@ export function setupGameHandlers(
     // Resign
     socket.on('resign', async ({ gameId }) => {
       try {
+        // Authorization: Only participants can resign
+        if (!await isGameParticipant(gameId, user.userId)) {
+          socket.emit('error', { code: 'UNAUTHORIZED', message: 'Only game participants can resign' });
+          return;
+        }
+
         const result = await gameService.resign(gameId, user.userId);
 
         if (!result.success) {
@@ -188,7 +214,7 @@ export function setupGameHandlers(
         });
 
         // Clean up
-        scoreAcceptances.delete(gameId);
+        await scoreRepo.clearAcceptances(gameId);
       } catch (error) {
         console.error('Error resigning:', error);
         socket.emit('error', { code: 'RESIGN_ERROR', message: 'Failed to resign' });
@@ -198,6 +224,12 @@ export function setupGameHandlers(
     // Mark dead stones during scoring
     socket.on('mark_dead_stones', async ({ gameId, positions }) => {
       try {
+        // Authorization: Only participants can mark dead stones
+        if (!await isGameParticipant(gameId, user.userId)) {
+          socket.emit('error', { code: 'UNAUTHORIZED', message: 'Only game participants can mark dead stones' });
+          return;
+        }
+
         const result = await gameService.markDeadStones(gameId, user.userId, positions);
 
         if (!result.success) {
@@ -206,7 +238,7 @@ export function setupGameHandlers(
         }
 
         // Reset acceptances when stones are marked
-        scoreAcceptances.set(gameId, new Set());
+        await scoreRepo.clearAcceptances(gameId);
 
         io.to(gameId).emit('dead_stones_marked', {
           positions,
@@ -233,23 +265,27 @@ export function setupGameHandlers(
           return;
         }
 
-        // Track acceptance
-        if (!scoreAcceptances.has(gameId)) {
-          scoreAcceptances.set(gameId, new Set());
+        // Authorization: Only participants can accept score
+        if (!await isGameParticipant(gameId, user.userId)) {
+          socket.emit('error', { code: 'UNAUTHORIZED', message: 'Only game participants can accept score' });
+          return;
         }
-        scoreAcceptances.get(gameId)!.add(user.userId);
+
+        // Track acceptance in database
+        await scoreRepo.addAcceptance(gameId, user.userId);
+
+        // Check if both players accepted
+        const bothAccepted = await scoreRepo.bothPlayersAccepted(
+          gameId,
+          game.blackPlayerId || '',
+          game.whitePlayerId || ''
+        );
 
         // Notify others
         io.to(gameId).emit('score_accepted', {
           acceptedBy: user.userId,
-          bothAccepted: false,
+          bothAccepted,
         });
-
-        // Check if both players accepted
-        const acceptances = scoreAcceptances.get(gameId)!;
-        const bothAccepted =
-          acceptances.has(game.blackPlayerId || '') &&
-          acceptances.has(game.whitePlayerId || '');
 
         if (bothAccepted) {
           const result = await gameService.acceptScore(gameId, user.userId);
@@ -262,7 +298,7 @@ export function setupGameHandlers(
             });
 
             // Clean up
-            scoreAcceptances.delete(gameId);
+            await scoreRepo.clearAcceptances(gameId);
           }
         }
       } catch (error) {
@@ -274,7 +310,7 @@ export function setupGameHandlers(
     // Reject score (reset to scoring phase)
     socket.on('reject_score', async ({ gameId }) => {
       // Just clear acceptances, allowing re-marking of dead stones
-      scoreAcceptances.set(gameId, new Set());
+      await scoreRepo.clearAcceptances(gameId);
 
       io.to(gameId).emit('error', {
         code: 'SCORE_REJECTED',

@@ -129,16 +129,74 @@ docker-compose exec server node packages/server/dist/db/migrate.js
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | 3000 |
-| `DB_HOST` | PostgreSQL host | localhost |
-| `DB_PORT` | PostgreSQL port | 5432 |
-| `DB_NAME` | Database name | webgo |
-| `DB_USER` | Database user | postgres |
-| `DB_PASSWORD` | Database password | postgres |
-| `JWT_SECRET` | JWT signing secret | (required) |
-| `CORS_ORIGIN` | Allowed CORS origin | http://localhost:5173 |
+| Variable | Description | Default | Production Required |
+|----------|-------------|---------|-------------------|
+| `NODE_ENV` | Environment mode | development | Yes (set to `production`) |
+| `PORT` | Server port | 3000 | No |
+| `DB_HOST` | PostgreSQL host | localhost | Yes |
+| `DB_PORT` | PostgreSQL port | 5432 | No |
+| `DB_NAME` | Database name | webgo | Yes |
+| `DB_USER` | Database user | postgres | Yes |
+| `DB_PASSWORD` | Database password | postgres | Yes |
+| `DB_SSL` | Enable SSL connection | false | Recommended for production |
+| `DB_SSL_CA` | Custom CA certificate path for SSL | - | Optional (for self-signed certs) |
+| `JWT_SECRET` | JWT signing secret (min 32 chars in prod) | (insecure default) | **Required** |
+| `JWT_EXPIRES_IN` | Token expiration time | 7d | No |
+| `CORS_ORIGIN` | Allowed CORS origin | http://localhost:5173 | Yes |
+
+#### Generating a Secure JWT Secret
+
+For production, generate a strong secret:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+**Security Notes:**
+- The server will **fail to start** in production if `JWT_SECRET` is not set or uses a default value
+- The server will **fail to start** in production if `JWT_SECRET` is shorter than 32 characters
+- In development mode, insecure defaults are allowed but warnings are logged
+- SSL certificate verification is enforced in production mode
+
+## Security Best Practices
+
+### Authentication
+- JWT tokens are used for authentication with configurable expiration
+- Passwords are hashed using bcryptjs with salt rounds = 10
+- Production requires a strong JWT secret (minimum 32 characters)
+
+### Database
+- SSL connections are supported with proper certificate verification in production
+- Use `DB_SSL=true` and optionally `DB_SSL_CA` for custom certificates
+- Optimistic locking prevents race conditions during concurrent game moves
+
+### Socket Authorization
+- Only game participants can make moves, pass, resign, or mark dead stones
+- Spectators can view games but cannot modify game state
+- All state-modifying socket events are authorized server-side
+
+### Optimistic Locking
+Game state updates use version-based optimistic locking to prevent race conditions:
+- Each game has a `version` column that increments on every update
+- Updates include `WHERE version = currentVersion` to detect conflicts
+- Failed updates are automatically retried up to 3 times with exponential backoff
+- Users receive clear error messages if concurrent modifications persist
+
+## Troubleshooting
+
+### "FATAL: JWT_SECRET is required in production"
+Generate a secure secret and set it as an environment variable:
+```bash
+export JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+```
+
+### "Concurrent modification detected"
+Multiple users or tabs are attempting to modify the same game simultaneously. The operation will be retried automatically. If the error persists, one of the moves will succeed while others are rejected.
+
+### SSL Connection Errors
+If using `DB_SSL=true` in production:
+- Ensure your PostgreSQL server has SSL enabled
+- For self-signed certificates, provide the CA certificate path via `DB_SSL_CA`
+- In development, SSL verification is relaxed to allow self-signed certs
 
 ## Game Rules
 
