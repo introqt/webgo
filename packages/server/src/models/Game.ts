@@ -9,6 +9,7 @@ import type {
   RuleSet,
   SerializedGameState,
   GameSummary,
+  GameHistoryItem,
 } from '@webgo/shared';
 import { GameEngine } from '../services/game/GameEngine.js';
 
@@ -196,6 +197,107 @@ export class GameRepository {
       [gameId]
     );
     return rows.map((row) => this.mapRowToMove(row));
+  }
+
+  async getGameHistoryWithRatings(
+    userId: string,
+    filter: 'all' | 'wins' | 'losses' = 'all',
+    limit = 10,
+    offset = 0
+  ): Promise<{ games: GameHistoryItem[]; total: number }> {
+    let filterClause = '';
+    if (filter === 'wins') {
+      filterClause = `AND ((g.black_player_id = $1 AND g.winner = 'black') OR (g.white_player_id = $1 AND g.winner = 'white'))`;
+    } else if (filter === 'losses') {
+      filterClause = `AND ((g.black_player_id = $1 AND g.winner = 'white') OR (g.white_player_id = $1 AND g.winner = 'black'))`;
+    }
+
+    // Get total count
+    const countResult = await query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM games g
+       WHERE (g.black_player_id = $1 OR g.white_player_id = $1)
+       AND g.status = 'finished'
+       ${filterClause}`,
+      [userId]
+    );
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    // Get games with ratings
+    const { rows } = await query<{
+      id: string;
+      board_size: number;
+      black_player_id: string | null;
+      white_player_id: string | null;
+      status: string;
+      winner: string | null;
+      win_reason: string | null;
+      final_score: { black: number; white: number } | null;
+      created_at: Date;
+      updated_at: Date;
+      black_username: string | null;
+      black_rating: number | null;
+      white_username: string | null;
+      white_rating: number | null;
+      user_rating_before: number | null;
+      user_rating_after: number | null;
+      user_rating_change: number | null;
+    }>(
+      `SELECT g.id, g.board_size, g.black_player_id, g.white_player_id,
+              g.status, g.winner, g.win_reason, g.final_score,
+              g.created_at, g.updated_at,
+              bu.username as black_username, bu.rating as black_rating,
+              wu.username as white_username, wu.rating as white_rating,
+              rc.rating_before as user_rating_before,
+              rc.rating_after as user_rating_after,
+              rc.rating_change as user_rating_change
+       FROM games g
+       LEFT JOIN users bu ON g.black_player_id = bu.id
+       LEFT JOIN users wu ON g.white_player_id = wu.id
+       LEFT JOIN game_rating_changes rc ON rc.game_id = g.id AND rc.user_id = $1
+       WHERE (g.black_player_id = $1 OR g.white_player_id = $1)
+       AND g.status = 'finished'
+       ${filterClause}
+       ORDER BY g.updated_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+
+    const games: GameHistoryItem[] = rows.map((row) => {
+      const userColor: StoneColor = row.black_player_id === userId ? 'black' : 'white';
+      const isWin =
+        (userColor === 'black' && row.winner === 'black') ||
+        (userColor === 'white' && row.winner === 'white');
+      const isLoss =
+        (userColor === 'black' && row.winner === 'white') ||
+        (userColor === 'white' && row.winner === 'black');
+
+      return {
+        id: row.id,
+        boardSize: row.board_size as BoardSize,
+        opponent: {
+          id: userColor === 'black' ? row.white_player_id! : row.black_player_id!,
+          username:
+            userColor === 'black'
+              ? row.white_username || 'Unknown'
+              : row.black_username || 'Unknown',
+          rating:
+            userColor === 'black'
+              ? row.white_rating || 1500
+              : row.black_rating || 1500,
+        },
+        userColor,
+        result: row.winner === 'draw' ? 'draw' : isWin ? 'win' : 'loss',
+        winner: row.winner as StoneColor | 'draw' | null,
+        winReason: row.win_reason as 'resignation' | 'score' | 'timeout' | null,
+        finalScore: row.final_score,
+        ratingChange: row.user_rating_change,
+        ratingBefore: row.user_rating_before,
+        ratingAfter: row.user_rating_after,
+        playedAt: row.updated_at,
+      };
+    });
+
+    return { games, total };
   }
 
   private mapRowToGame(row: GameRow): Game {

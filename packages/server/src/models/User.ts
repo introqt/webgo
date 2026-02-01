@@ -101,6 +101,25 @@ export class UserRepository {
     await query('UPDATE users SET rating = $1 WHERE id = $2', [rating, userId]);
   }
 
+  async getLeaderboard(limit = 20, offset = 0): Promise<UserPublic[]> {
+    const { rows } = await query<{ id: string; username: string; rating: number }>(
+      `SELECT id, username, rating FROM users
+       ORDER BY rating DESC, username ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    return rows.map(row => ({
+      id: row.id,
+      username: row.username,
+      rating: row.rating,
+    }));
+  }
+
+  async getTotalCount(): Promise<number> {
+    const { rows } = await query<{ count: string }>('SELECT COUNT(*) as count FROM users');
+    return parseInt(rows[0].count, 10);
+  }
+
   private mapRowToUser(row: UserRow): User {
     return {
       id: row.id,
