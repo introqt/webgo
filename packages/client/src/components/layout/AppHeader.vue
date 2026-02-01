@@ -21,15 +21,17 @@ function logout() {
       <RouterLink to="/" class="text-2xl font-bold text-white hover:text-blue-400">
         WebGo
       </RouterLink>
+      <template v-if="isAuthenticated">
+        <RouterLink to="/lobby" class="text-gray-300 hover:text-white">
+          Play
+        </RouterLink>
+      </template>
 
       <nav class="flex items-center gap-4">
         <RouterLink to="/leaderboard" class="text-gray-300 hover:text-white">
           Leaderboard
         </RouterLink>
         <template v-if="isAuthenticated">
-          <RouterLink to="/lobby" class="text-gray-300 hover:text-white">
-            Play
-          </RouterLink>
           <RouterLink to="/profile" class="text-gray-300 hover:text-white">
             {{ username }}
           </RouterLink>
