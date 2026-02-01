@@ -4,19 +4,24 @@ import { useRoute, useRouter } from 'vue-router';
 import type { Position } from '@webgo/shared';
 import { useGameStore } from '@/stores/game';
 import { useAuthStore } from '@/stores/auth';
+import { useSound } from '@/composables/useSound';
 import GoBoard from '@/components/game/GoBoard.vue';
 import GameInfo from '@/components/game/GameInfo.vue';
 import GameControls from '@/components/game/GameControls.vue';
 import InvitationLink from '@/components/game/InvitationLink.vue';
 import MoveHistory from '@/components/game/MoveHistory.vue';
+import VictoryOverlay from '@/components/game/VictoryOverlay.vue';
+import SoundToggle from '@/components/game/SoundToggle.vue';
 
 const route = useRoute();
 const router = useRouter();
 const gameStore = useGameStore();
 const authStore = useAuthStore();
+const { play } = useSound();
 
 const gameId = computed(() => route.params.id as string);
 const loading = ref(true);
+const showVictoryOverlay = ref(false);
 
 const boardSize = computed(() => gameStore.currentGame?.boardSize || 19);
 const stones = computed(() => gameStore.stones);
@@ -29,8 +34,8 @@ const captures = computed(() => gameStore.captures);
 const error = computed(() => gameStore.error);
 const blackPlayer = computed(() => gameStore.blackPlayer);
 const whitePlayer = computed(() => gameStore.whitePlayer);
-const winner = computed(() => gameStore.currentGame?.winner);
-const finalScore = computed(() => gameStore.currentGame?.finalScore);
+const winner = computed(() => gameStore.currentGame?.winner ?? null);
+const finalScore = computed(() => gameStore.currentGame?.finalScore ?? null);
 const invitationCode = computed(() => gameStore.currentGame?.invitationCode || '');
 const deadStones = computed(() => gameStore.gameState?.deadStones || []);
 const territory = computed(() => gameStore.gameState?.territory || { black: [], white: [] });
@@ -65,6 +70,10 @@ function goToLobby() {
   router.push('/lobby');
 }
 
+function dismissVictory() {
+  showVictoryOverlay.value = false;
+}
+
 async function initGame() {
   loading.value = true;
   try {
@@ -81,7 +90,14 @@ async function initGame() {
 
     // Connect via WebSocket if authenticated
     if (authStore.isAuthenticated) {
-      gameStore.connectToGame(gameId.value);
+      gameStore.connectToGame(gameId.value, {
+        onStonePlace: () => play('stone-place'),
+        onCapture: () => play('stone-capture'),
+        onVictory: () => {
+          play('victory');
+          showVictoryOverlay.value = true;
+        },
+      });
     }
   } catch (e) {
     console.error('Failed to load game:', e);
@@ -107,6 +123,14 @@ watch(gameId, () => {
 
 <template>
   <div class="container mx-auto px-4 py-6">
+    <!-- Victory Overlay -->
+    <VictoryOverlay
+      v-if="showVictoryOverlay && status === 'finished'"
+      :winner="winner"
+      :final-score="finalScore"
+      @dismiss="dismissVictory"
+    />
+
     <div v-if="loading" class="text-center py-16">
       <div class="text-xl text-gray-400">Loading game...</div>
     </div>
@@ -187,6 +211,9 @@ watch(gameId, () => {
           :moves="moves"
           :board-size="boardSize"
         />
+
+        <!-- Sound toggle -->
+        <SoundToggle />
 
         <!-- Back to lobby -->
         <button @click="goToLobby" class="w-full btn btn-secondary">
