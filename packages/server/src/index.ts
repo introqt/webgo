@@ -1,10 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config } from './config/index.js';
 import { testConnection } from './config/database.js';
 import routes from './routes/index.js';
 import { createSocketServer } from './socket/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function main() {
   // Test database connection
@@ -31,6 +36,17 @@ async function main() {
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
+
+  // Serve static files from client build (production only)
+  if (config.nodeEnv === 'production') {
+    const clientPath = path.join(__dirname, '..', '..', 'client', 'dist');
+    app.use(express.static(clientPath));
+
+    // Catch-all route to serve index.html for Vue SPA routing
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(clientPath, 'index.html'));
+    });
+  }
 
   // Setup WebSocket
   const io = createSocketServer(httpServer);

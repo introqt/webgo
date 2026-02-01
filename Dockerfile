@@ -60,6 +60,9 @@ COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
 COPY --from=builder /app/packages/server/src/db ./packages/server/src/db
 
+# Copy built client files to serve as static assets
+COPY --from=builder /app/packages/client/dist ./packages/client/dist
+
 EXPOSE 3000
 
 # Run migrations then start server
