@@ -27,7 +27,20 @@ RUN pnpm --filter @webgo/shared run build
 RUN pnpm --filter @webgo/server run build
 RUN pnpm --filter @webgo/client run build
 
-# Production stage for server
+# Nginx stage for client (for local docker-compose if needed)
+FROM nginx:alpine AS client
+
+# Copy nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built client files
+COPY --from=builder /app/packages/client/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+
+# Production stage for server (MUST BE LAST - Railway default)
 FROM node:20-alpine AS server
 
 WORKDIR /app
@@ -51,16 +64,3 @@ EXPOSE 3000
 
 # Run migrations then start server
 CMD sh -c "cd packages/server && node dist/db/migrate.js && cd ../.. && node packages/server/dist/index.js"
-
-# Nginx stage for client
-FROM nginx:alpine AS client
-
-# Copy nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy built client files
-COPY --from=builder /app/packages/client/dist /usr/share/nginx/html
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
