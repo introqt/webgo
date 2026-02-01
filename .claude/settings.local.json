@@ -17,7 +17,9 @@
       "Bash(docker-compose:*)",
       "Bash(pnpm db:migrate:*)",
       "Bash(curl:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
