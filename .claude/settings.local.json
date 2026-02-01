@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:online-go.com)",
+      "WebFetch(domain:chess.com)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm build:shared:*)",
+      "Bash(pnpm build:server:*)",
+      "Bash(pnpm build:client:*)",
+      "Bash(node:*)",
+      "Bash(npm --version)",
+      "Bash(pnpm --version:*)",
+      "Bash(test:*)",
+      "Bash(pnpm test:server:*)",
+      "Bash(pnpm dev:server:*)",
+      "Bash(ls:*)",
+      "Bash(docker-compose:*)",
+      "Bash(pnpm db:migrate:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}

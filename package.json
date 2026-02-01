@@ -1,0 +1,28 @@
+{
+  "name": "webgo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Online Go game platform",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:server": "pnpm --filter @webgo/server run dev",
+    "dev:client": "pnpm --filter @webgo/client run dev",
+    "build": "pnpm -r run build",
+    "build:shared": "pnpm --filter @webgo/shared run build",
+    "build:server": "pnpm --filter @webgo/server run build",
+    "build:client": "pnpm --filter @webgo/client run build",
+    "test": "pnpm -r run test",
+    "test:server": "pnpm --filter @webgo/server run test",
+    "lint": "pnpm -r run lint",
+    "db:migrate": "pnpm --filter @webgo/server run db:migrate",
+    "db:seed": "pnpm --filter @webgo/server run db:seed"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.0",
+  "dependencies": {
+    "ngrok": "^5.0.0-beta.2"
+  }
+}
