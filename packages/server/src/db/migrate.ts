@@ -92,6 +92,23 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_score_acceptances_game ON score_acceptances(game_id);
     `,
   },
+  {
+    name: '007_add_game_rating_changes',
+    up: `
+      CREATE TABLE IF NOT EXISTS game_rating_changes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        rating_before INTEGER NOT NULL,
+        rating_after INTEGER NOT NULL,
+        rating_change INTEGER NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(game_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_game_rating_changes_user ON game_rating_changes(user_id);
+      CREATE INDEX IF NOT EXISTS idx_game_rating_changes_game ON game_rating_changes(game_id);
+    `,
+  },
 ];
 
 async function migrate() {
