@@ -37,6 +37,11 @@ export const useGameStore = defineStore('game', () => {
   const whitePlayer = ref<UserPublic | null>(null);
   const error = ref<string | null>(null);
   const loading = ref(false);
+  const endReason = ref<'resignation' | 'score' | 'timeout' | null>(null);
+  const ratingChanges = ref<{
+    black: { change: number; newRating: number; oldRating: number } | null;
+    white: { change: number; newRating: number; oldRating: number } | null;
+  } | null>(null);
 
   const isMyTurn = computed(() => {
     if (!gameState.value || !myColor.value) return false;
@@ -163,6 +168,8 @@ export const useGameStore = defineStore('game', () => {
         currentGame.value.winner = data.winner;
         currentGame.value.finalScore = data.finalScore;
       }
+      endReason.value = data.reason;
+      ratingChanges.value = data.ratingChanges || null;
       soundCallback?.onVictory();
     });
 
@@ -228,6 +235,8 @@ export const useGameStore = defineStore('game', () => {
     whitePlayer,
     error,
     loading,
+    endReason,
+    ratingChanges,
     isMyTurn,
     currentTurn,
     status,

@@ -8,12 +8,14 @@ import { GameService } from '../services/game/index.js';
 import { GameRepository } from '../models/Game.js';
 import { UserRepository } from '../models/User.js';
 import { ScoreAcceptanceRepository } from '../models/ScoreAcceptance.js';
+import { RatingChangeRepository } from '../models/RatingChange.js';
 import { AuthService, TokenPayload } from '../services/auth/index.js';
 import { GameEngine } from '../services/game/GameEngine.js';
 
 const gameRepo = new GameRepository();
 const userRepo = new UserRepository();
 const scoreRepo = new ScoreAcceptanceRepository();
+const ratingRepo = new RatingChangeRepository();
 const gameService = new GameService(gameRepo);
 const authService = new AuthService(userRepo);
 
@@ -207,10 +209,36 @@ export function setupGameHandlers(
           return;
         }
 
+        // Fetch player info and rating changes
+        const game = await gameService.getGame(gameId);
+        if (!game) return;
+
+        const blackPlayer = game.blackPlayerId ? await userRepo.getPublicInfo(game.blackPlayerId) : null;
+        const whitePlayer = game.whitePlayerId ? await userRepo.getPublicInfo(game.whitePlayerId) : null;
+        const ratingChanges = await ratingRepo.findByGameId(gameId);
+
         io.to(gameId).emit('game_ended', {
           winner: result.gameResult!.winner,
           reason: 'resignation',
           finalScore: result.gameResult!.finalScore,
+          blackPlayer,
+          whitePlayer,
+          ratingChanges: {
+            black: ratingChanges.find(r => r.userId === game.blackPlayerId)
+              ? {
+                  change: ratingChanges.find(r => r.userId === game.blackPlayerId)!.ratingChange,
+                  newRating: ratingChanges.find(r => r.userId === game.blackPlayerId)!.ratingAfter,
+                  oldRating: ratingChanges.find(r => r.userId === game.blackPlayerId)!.ratingBefore,
+                }
+              : null,
+            white: ratingChanges.find(r => r.userId === game.whitePlayerId)
+              ? {
+                  change: ratingChanges.find(r => r.userId === game.whitePlayerId)!.ratingChange,
+                  newRating: ratingChanges.find(r => r.userId === game.whitePlayerId)!.ratingAfter,
+                  oldRating: ratingChanges.find(r => r.userId === game.whitePlayerId)!.ratingBefore,
+                }
+              : null,
+          },
         });
 
         // Clean up
@@ -291,10 +319,33 @@ export function setupGameHandlers(
           const result = await gameService.acceptScore(gameId, user.userId);
 
           if (result.success && result.gameResult) {
+            // Fetch player info and rating changes
+            const blackPlayer = game.blackPlayerId ? await userRepo.getPublicInfo(game.blackPlayerId) : null;
+            const whitePlayer = game.whitePlayerId ? await userRepo.getPublicInfo(game.whitePlayerId) : null;
+            const ratingChanges = await ratingRepo.findByGameId(gameId);
+
             io.to(gameId).emit('game_ended', {
               winner: result.gameResult.winner,
               reason: 'score',
               finalScore: result.gameResult.finalScore,
+              blackPlayer,
+              whitePlayer,
+              ratingChanges: {
+                black: ratingChanges.find(r => r.userId === game.blackPlayerId)
+                  ? {
+                      change: ratingChanges.find(r => r.userId === game.blackPlayerId)!.ratingChange,
+                      newRating: ratingChanges.find(r => r.userId === game.blackPlayerId)!.ratingAfter,
+                      oldRating: ratingChanges.find(r => r.userId === game.blackPlayerId)!.ratingBefore,
+                    }
+                  : null,
+                white: ratingChanges.find(r => r.userId === game.whitePlayerId)
+                  ? {
+                      change: ratingChanges.find(r => r.userId === game.whitePlayerId)!.ratingChange,
+                      newRating: ratingChanges.find(r => r.userId === game.whitePlayerId)!.ratingAfter,
+                      oldRating: ratingChanges.find(r => r.userId === game.whitePlayerId)!.ratingBefore,
+                    }
+                  : null,
+              },
             });
 
             // Clean up
