@@ -48,6 +48,45 @@ export async function createGame(req: Request, res: Response): Promise<void> {
 export async function getGame(req: Request, res: Response): Promise<void> {
   try {
     const { gameId } = req.params;
+    const testWin = req.query.test_win as string | undefined;
+
+    // Handle test_win param (development only)
+    if (testWin && process.env.NODE_ENV !== 'production') {
+      if (testWin !== 'black' && testWin !== 'white') {
+        res.status(400).json({ error: 'test_win must be "black" or "white"' });
+        return;
+      }
+
+      const result = await gameService.forceWinner(gameId, testWin);
+      if (!result.success) {
+        res.status(400).json({ error: result.error });
+        return;
+      }
+
+      // Fetch the updated game
+      const updatedGame = await gameService.getGame(gameId);
+      if (!updatedGame) {
+        res.status(404).json({ error: 'Game not found' });
+        return;
+      }
+
+      const blackPlayer = updatedGame.blackPlayerId
+        ? await userRepo.getPublicInfo(updatedGame.blackPlayerId)
+        : null;
+      const whitePlayer = updatedGame.whitePlayerId
+        ? await userRepo.getPublicInfo(updatedGame.whitePlayerId)
+        : null;
+
+      res.json({
+        ...updatedGame,
+        gameState: GameEngine.serializeGameState(updatedGame.gameState),
+        blackPlayer,
+        whitePlayer,
+        testWinApplied: true,
+      });
+      return;
+    }
+
     const game = await gameService.getGame(gameId);
 
     if (!game) {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
+import GameHistory from '@/components/profile/GameHistory.vue';
 
 const authStore = useAuthStore();
 
@@ -60,12 +61,18 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- Game History -->
+        <GameHistory />
+
         <!-- Actions -->
         <div class="card">
           <h2 class="text-xl font-semibold mb-4">Actions</h2>
           <div class="space-y-3">
             <RouterLink to="/lobby" class="block w-full btn btn-primary text-center">
               Play a Game
+            </RouterLink>
+            <RouterLink to="/leaderboard" class="block w-full btn bg-gray-700 hover:bg-gray-600 text-center">
+              View Leaderboard
             </RouterLink>
           </div>
         </div>

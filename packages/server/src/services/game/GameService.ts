@@ -14,6 +14,9 @@ import type {
 import { DEFAULT_KOMI, INVITATION_CODE_LENGTH } from '@webgo/shared';
 import { GameEngine } from './GameEngine.js';
 import { GameRepository } from '../../models/Game.js';
+import { UserRepository } from '../../models/User.js';
+import { RatingChangeRepository } from '../../models/RatingChange.js';
+import { EloService } from '../rating/EloService.js';
 
 export interface CreateGameOptions {
   boardSize: BoardSize;
@@ -34,7 +37,13 @@ export interface MakeMoveResult {
 }
 
 export class GameService {
-  constructor(private gameRepo: GameRepository) {}
+  private userRepo: UserRepository;
+  private ratingChangeRepo: RatingChangeRepository;
+
+  constructor(private gameRepo: GameRepository) {
+    this.userRepo = new UserRepository();
+    this.ratingChangeRepo = new RatingChangeRepository();
+  }
 
   /**
    * Generate a unique invitation code
@@ -348,6 +357,13 @@ export class GameService {
 
     await this.gameRepo.update(game);
 
+    // Update ratings
+    const winnerId = game.winner === 'black' ? game.blackPlayerId : game.whitePlayerId;
+    const loserId = playerId;
+    if (winnerId && loserId) {
+      await this.updateRatingsAfterGame(game.id, winnerId, loserId, false);
+    }
+
     return {
       success: true,
       gameState: GameEngine.serializeGameState(game.gameState),
@@ -469,6 +485,17 @@ export class GameService {
 
     await this.gameRepo.update(game);
 
+    // Update ratings
+    if (game.blackPlayerId && game.whitePlayerId) {
+      if (game.winner === 'draw') {
+        await this.updateRatingsAfterGame(game.id, game.blackPlayerId, game.whitePlayerId, true);
+      } else {
+        const winnerId = game.winner === 'black' ? game.blackPlayerId : game.whitePlayerId;
+        const loserId = game.winner === 'black' ? game.whitePlayerId : game.blackPlayerId;
+        await this.updateRatingsAfterGame(game.id, winnerId, loserId, false);
+      }
+    }
+
     return {
       success: true,
       gameState: GameEngine.serializeGameState(game.gameState),
@@ -496,5 +523,112 @@ export class GameService {
     if (game.blackPlayerId === playerId) return 'black';
     if (game.whitePlayerId === playerId) return 'white';
     return null;
+  }
+
+  /**
+   * Update ratings after a game ends
+   * @param gameId - The game ID
+   * @param player1Id - Winner ID (or first player for draw)
+   * @param player2Id - Loser ID (or second player for draw)
+   * @param isDraw - Whether the game was a draw
+   */
+  private async updateRatingsAfterGame(
+    gameId: string,
+    player1Id: string,
+    player2Id: string,
+    isDraw: boolean
+  ): Promise<void> {
+    const player1 = await this.userRepo.findById(player1Id);
+    const player2 = await this.userRepo.findById(player2Id);
+
+    if (!player1 || !player2) return;
+
+    if (isDraw) {
+      const result = EloService.calculateDrawResult(player1.rating, player2.rating);
+
+      // Update player 1 rating
+      await this.userRepo.updateRating(player1Id, result.player1.newRating);
+      await this.ratingChangeRepo.create({
+        gameId,
+        userId: player1Id,
+        ratingBefore: player1.rating,
+        ratingAfter: result.player1.newRating,
+        ratingChange: result.player1.ratingChange,
+      });
+
+      // Update player 2 rating
+      await this.userRepo.updateRating(player2Id, result.player2.newRating);
+      await this.ratingChangeRepo.create({
+        gameId,
+        userId: player2Id,
+        ratingBefore: player2.rating,
+        ratingAfter: result.player2.newRating,
+        ratingChange: result.player2.ratingChange,
+      });
+    } else {
+      // player1 is winner, player2 is loser
+      const result = EloService.calculateGameResult(player1.rating, player2.rating);
+
+      // Update winner rating
+      await this.userRepo.updateRating(player1Id, result.winner.newRating);
+      await this.ratingChangeRepo.create({
+        gameId,
+        userId: player1Id,
+        ratingBefore: player1.rating,
+        ratingAfter: result.winner.newRating,
+        ratingChange: result.winner.ratingChange,
+      });
+
+      // Update loser rating
+      await this.userRepo.updateRating(player2Id, result.loser.newRating);
+      await this.ratingChangeRepo.create({
+        gameId,
+        userId: player2Id,
+        ratingBefore: player2.rating,
+        ratingAfter: result.loser.newRating,
+        ratingChange: result.loser.ratingChange,
+      });
+    }
+  }
+
+  /**
+   * Force a winner for testing purposes (development only)
+   */
+  async forceWinner(gameId: string, winnerColor: StoneColor): Promise<MakeMoveResult> {
+    const game = await this.gameRepo.findById(gameId);
+    if (!game) {
+      return { success: false, error: 'Game not found' };
+    }
+
+    if (game.status !== 'active' && game.status !== 'scoring') {
+      return { success: false, error: 'Game is not active' };
+    }
+
+    // End the game with forced winner
+    game.status = 'finished';
+    game.winner = winnerColor;
+    game.winReason = 'score';
+    game.finalScore = winnerColor === 'black' ? { black: 100, white: 0 } : { black: 0, white: 100 };
+    game.updatedAt = new Date();
+
+    await this.gameRepo.update(game);
+
+    // Update ratings
+    if (game.blackPlayerId && game.whitePlayerId) {
+      const winnerId = winnerColor === 'black' ? game.blackPlayerId : game.whitePlayerId;
+      const loserId = winnerColor === 'black' ? game.whitePlayerId : game.blackPlayerId;
+      await this.updateRatingsAfterGame(game.id, winnerId, loserId, false);
+    }
+
+    return {
+      success: true,
+      gameState: GameEngine.serializeGameState(game.gameState),
+      gameEnded: true,
+      gameResult: {
+        winner: game.winner,
+        reason: 'score',
+        finalScore: game.finalScore,
+      },
+    };
   }
 }
