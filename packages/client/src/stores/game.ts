@@ -113,7 +113,11 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  function connectToGame(gameId: string) {
+  function connectToGame(gameId: string, soundCallback?: {
+    onStonePlace: () => void;
+    onCapture: () => void;
+    onVictory: () => void;
+  }) {
     socketService.connect();
     socketService.joinGame(gameId);
 
@@ -135,7 +139,18 @@ export const useGameStore = defineStore('game', () => {
     });
 
     socketService.onMoveMade((data) => {
+      const previousCaptures = gameState.value?.board.captures || { black: 0, white: 0 };
+      const newCaptures = data.gameState.board.captures;
+      
       gameState.value = data.gameState;
+
+      // Play stone placement sound
+      soundCallback?.onStonePlace();
+
+      // Check if stones were captured
+      if (newCaptures.black > previousCaptures.black || newCaptures.white > previousCaptures.white) {
+        soundCallback?.onCapture();
+      }
     });
 
     socketService.onTurnPassed((data) => {
@@ -148,6 +163,7 @@ export const useGameStore = defineStore('game', () => {
         currentGame.value.winner = data.winner;
         currentGame.value.finalScore = data.finalScore;
       }
+      soundCallback?.onVictory();
     });
 
     socketService.onScoringStarted((data) => {
