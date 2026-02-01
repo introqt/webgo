@@ -11,6 +11,8 @@
     "build:shared": "pnpm --filter @webgo/shared run build",
     "build:server": "pnpm --filter @webgo/server run build",
     "build:client": "pnpm --filter @webgo/client run build",
+    "start": "node packages/server/dist/index.js",
+    "start:server": "node packages/server/dist/index.js",
     "test": "pnpm -r run test",
     "test:server": "pnpm --filter @webgo/server run test",
     "lint": "pnpm -r run lint",
