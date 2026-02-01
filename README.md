@@ -66,6 +66,46 @@ The client will be available at `http://localhost:5173` and the API at `http://l
 - `alice@example.com` / `password123`
 - `bob@example.com` / `password123`
 
+## 🚀 Quick Deploy
+
+### Railway.app (Easiest - 5 minutes)
+
+1. **Install Railway CLI:**
+```bash
+npm install -g @railway/cli
+```
+
+2. **Run deployment script:**
+```bash
+# Windows PowerShell
+.\deploy-railway.ps1
+
+# Mac/Linux
+chmod +x deploy-railway.sh
+./deploy-railway.sh
+```
+
+3. **Follow the prompts** - the script will:
+   - Create a Railway project
+   - Add PostgreSQL database
+   - Generate secure JWT secret
+   - Deploy your app
+
+4. **Get your domain:**
+   - Visit [railway.app/dashboard](https://railway.app/dashboard)
+   - Click your project → Settings → Generate Domain
+   - Update CORS: `railway variables set CORS_ORIGIN=https://your-app.railway.app`
+
+**That's it!** Your app will be live in ~2 minutes.
+
+### Other Hosting Options
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed guides on:
+- Render.com (free tier available)
+- Fly.io (edge deployment)
+- DigitalOcean App Platform
+- VPS deployment with Docker
+
 ## Project Structure
 
 ```

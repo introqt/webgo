@@ -27,6 +27,11 @@ async function main() {
   // API routes
   app.use('/api', routes);
 
+  // Health check endpoint for deployment platforms
+  app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // Setup WebSocket
   const io = createSocketServer(httpServer);
 

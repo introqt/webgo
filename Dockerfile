@@ -42,13 +42,15 @@ COPY packages/server/package.json ./packages/server/
 # Install production dependencies only
 RUN pnpm install --prod --frozen-lockfile
 
-# Copy built files
+# Copy built files and migration scripts
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
+COPY --from=builder /app/packages/server/src/db ./packages/server/src/db
 
 EXPOSE 3000
 
-CMD ["node", "packages/server/dist/index.js"]
+# Run migrations then start server
+CMD sh -c "cd packages/server && node dist/db/migrate.js && cd ../.. && node packages/server/dist/index.js"
 
 # Nginx stage for client
 FROM nginx:alpine AS client
