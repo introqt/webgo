@@ -46,6 +46,11 @@ const router = createRouter({
       name: 'leaderboard',
       component: () => import('@/views/LeaderboardView.vue'),
     },
+    {
+      path: '/learn',
+      name: 'learn',
+      component: () => import('@/views/LearnView.vue'),
+    },
   ],
 });
 
