@@ -23,6 +23,9 @@ function logout() {
       </RouterLink>
 
       <nav class="flex items-center gap-4">
+        <RouterLink to="/leaderboard" class="text-gray-300 hover:text-white">
+          Leaderboard
+        </RouterLink>
         <template v-if="isAuthenticated">
           <RouterLink to="/lobby" class="text-gray-300 hover:text-white">
             Play
