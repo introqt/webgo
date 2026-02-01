@@ -45,15 +45,15 @@ FROM node:20-alpine AS server
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
-
-# Copy package files
+# Copy package files for workspace structure
 COPY package.json pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/server/package.json ./packages/server/
 
-# Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile
+# Copy node_modules from builder (faster than reinstalling)
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=builder /app/packages/server/node_modules ./packages/server/node_modules
 
 # Copy built files and migration scripts
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
