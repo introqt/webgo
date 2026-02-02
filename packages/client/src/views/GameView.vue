@@ -124,7 +124,7 @@ watch(gameId, () => {
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-6">
+  <div class="w-full min-h-screen flex flex-col">
     <!-- Victory Overlay -->
     <VictoryOverlay
       v-if="showVictoryOverlay && status === 'finished'"
@@ -137,20 +137,20 @@ watch(gameId, () => {
       @dismiss="dismissVictory"
     />
 
-    <div v-if="loading" class="text-center py-16">
+    <div v-if="loading" class="text-center py-16 flex-1">
       <div class="text-xl text-gray-400">Loading game...</div>
     </div>
 
-    <div v-else-if="!gameStore.currentGame" class="text-center py-16">
+    <div v-else-if="!gameStore.currentGame" class="text-center py-16 flex-1">
       <div class="text-xl text-gray-400 mb-4">Game not found</div>
       <button @click="goToLobby" class="btn btn-primary">
         Back to Lobby
       </button>
     </div>
 
-    <div v-else class="flex flex-col lg:flex-row gap-6">
+    <div v-else class="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 px-4 py-6 lg:px-6 overflow-x-hidden">
       <!-- Left Sidebar (hidden on mobile) -->
-      <div class="hidden lg:block lg:w-[280px] space-y-4">
+      <div class="hidden lg:block lg:w-[280px] space-y-4 flex-shrink-0">
         <!-- Game info -->
         <GameInfo
           :black-player="blackPlayer"
@@ -171,7 +171,7 @@ watch(gameId, () => {
       </div>
 
       <!-- Center Board -->
-      <div class="flex-1 flex justify-center items-start">
+      <div class="flex-1 flex justify-center items-start min-w-0">
         <GoBoard
           :size="boardSize"
           :stones="stones"
@@ -187,7 +187,7 @@ watch(gameId, () => {
       </div>
 
       <!-- Right Sidebar -->
-      <div class="w-full lg:w-[280px] space-y-4">
+      <div class="w-full lg:w-[280px] space-y-4 flex-shrink-0">
         <!-- Error message -->
         <div
           v-if="error"

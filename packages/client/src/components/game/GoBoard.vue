@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import type { BoardSize, StoneColor, Position } from '@webgo/shared';
 import { STAR_POINTS } from '@webgo/shared';
 
@@ -20,12 +20,43 @@ const emit = defineEmits<{
 }>();
 
 const hoverPosition = ref<Position | null>(null);
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
 
 const cellSize = computed(() => {
-  // Responsive sizing based on board size
-  if (props.size === 9) return 44;
-  if (props.size === 13) return 36;
+  // Responsive sizing based on board size and viewport width
+  const baseSize = props.size;
+  const vw = viewportWidth.value;
+
+  // Extra small phones (< 380px) - very compact
+  if (vw < 380) {
+    if (baseSize === 9) return 28;
+    if (baseSize === 13) return 22;
+    return 16;
+  }
+
+  // Small phones (380px - 640px)
+  if (vw < 640) {
+    if (baseSize === 9) return 36;
+    if (baseSize === 13) return 28;
+    return 22;
+  }
+
+  // Tablets and larger (640px+)
+  if (baseSize === 9) return 44;
+  if (baseSize === 13) return 36;
   return 28;
+});
+
+function handleResize() {
+  viewportWidth.value = window.innerWidth;
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize);
 });
 
 const boardPadding = computed(() => cellSize.value);
@@ -287,14 +318,26 @@ function getPosition(x: number, y: number) {
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;
 }
 
 .go-board {
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 100%;
+  height: auto;
 }
 
 .fill-board {
   fill: #DEB887;
+}
+
+/* Ensure the SVG is responsive on smaller screens */
+@media (max-width: 640px) {
+  .go-board-container {
+    padding: 0;
+  }
 }
 </style>
