@@ -6,6 +6,7 @@ import type {
   StoneColor,
   Position,
   UserPublic,
+  BotDifficulty,
 } from '@webgo/shared';
 import { api } from '@/services/api';
 import { socketService } from '@/services/socket';
@@ -27,6 +28,17 @@ interface JoinGameResponse {
     whitePlayer: UserPublic | null;
   };
   color: StoneColor;
+}
+
+interface CreateBotGameResponse {
+  game: SerializedGame;
+  botPlayer: {
+    id: string;
+    username: string;
+    rating: number;
+    isBot: true;
+    botDifficulty: BotDifficulty;
+  };
 }
 
 export const useGameStore = defineStore('game', () => {
@@ -75,6 +87,28 @@ export const useGameStore = defineStore('game', () => {
       return response.data;
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to create game';
+      throw e;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function createBotGame(boardSize: 9 | 13 | 19, difficulty: BotDifficulty, color?: StoneColor) {
+    loading.value = true;
+    error.value = null;
+    try {
+      const response = await api.post<CreateBotGameResponse>('/games/create-vs-bot', {
+        boardSize,
+        difficulty,
+        color,
+      });
+      currentGame.value = response.data.game;
+      gameState.value = response.data.game.gameState;
+      // Determine player's color based on bot assignment
+      myColor.value = response.data.game.blackPlayerId === response.data.botPlayer.id ? 'white' : 'black';
+      return response.data;
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to create bot game';
       throw e;
     } finally {
       loading.value = false;
@@ -244,6 +278,7 @@ export const useGameStore = defineStore('game', () => {
     captures,
     lastMove,
     createGame,
+    createBotGame,
     loadGame,
     joinGame,
     connectToGame,

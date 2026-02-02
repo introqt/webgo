@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import type { BoardSize, StoneColor, GameSummary } from '@webgo/shared';
+import type { BoardSize, StoneColor, GameSummary, BotDifficulty } from '@webgo/shared';
 import { useGameStore } from '@/stores/game';
 import { useAuthStore } from '@/stores/auth';
 import { api } from '@/services/api';
@@ -12,6 +12,8 @@ const authStore = useAuthStore();
 
 const boardSize = ref<BoardSize>(19);
 const selectedColor = ref<StoneColor | 'random'>('random');
+const gameMode = ref<'human' | 'bot'>('human');
+const botDifficulty = ref<BotDifficulty>('medium');
 const joinCode = ref('');
 const error = ref('');
 const loading = ref(false);
@@ -25,8 +27,14 @@ async function createGame() {
 
   try {
     const color = selectedColor.value === 'random' ? undefined : selectedColor.value;
-    const result = await gameStore.createGame(boardSize.value, color);
-    router.push(`/game/${result.game.id}`);
+
+    if (gameMode.value === 'bot') {
+      const result = await gameStore.createBotGame(boardSize.value, botDifficulty.value, color);
+      router.push(`/game/${result.game.id}`);
+    } else {
+      const result = await gameStore.createGame(boardSize.value, color);
+      router.push(`/game/${result.game.id}`);
+    }
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to create game';
   } finally {
@@ -128,6 +136,73 @@ onMounted(() => {
 
         <div class="space-y-4">
           <div>
+            <label class="block text-sm font-medium mb-2">Opponent</label>
+            <div class="flex gap-2">
+              <button
+                @click="gameMode = 'human'"
+                :class="[
+                  'flex-1 py-2 rounded-lg font-medium transition-colors',
+                  gameMode === 'human'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600',
+                ]"
+              >
+                Human
+              </button>
+              <button
+                @click="gameMode = 'bot'"
+                :class="[
+                  'flex-1 py-2 rounded-lg font-medium transition-colors',
+                  gameMode === 'bot'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600',
+                ]"
+              >
+                Bot
+              </button>
+            </div>
+          </div>
+
+          <div v-if="gameMode === 'bot'">
+            <label class="block text-sm font-medium mb-2">Bot Difficulty</label>
+            <div class="flex gap-2">
+              <button
+                @click="botDifficulty = 'easy'"
+                :class="[
+                  'flex-1 py-2 rounded-lg font-medium transition-colors',
+                  botDifficulty === 'easy'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600',
+                ]"
+              >
+                Easy
+              </button>
+              <button
+                @click="botDifficulty = 'medium'"
+                :class="[
+                  'flex-1 py-2 rounded-lg font-medium transition-colors',
+                  botDifficulty === 'medium'
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600',
+                ]"
+              >
+                Medium
+              </button>
+              <button
+                @click="botDifficulty = 'hard'"
+                :class="[
+                  'flex-1 py-2 rounded-lg font-medium transition-colors',
+                  botDifficulty === 'hard'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600',
+                ]"
+              >
+                Hard
+              </button>
+            </div>
+          </div>
+
+          <div>
             <label class="block text-sm font-medium mb-2">Board Size</label>
             <div class="flex gap-2">
               <button
@@ -192,7 +267,7 @@ onMounted(() => {
             :disabled="loading"
             class="w-full btn btn-primary py-3"
           >
-            {{ loading ? 'Creating...' : 'Create Game' }}
+            {{ loading ? 'Creating...' : gameMode === 'bot' ? 'Play vs Bot' : 'Create Game' }}
           </button>
         </div>
       </div>

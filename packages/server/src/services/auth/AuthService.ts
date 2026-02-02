@@ -37,6 +37,7 @@ export class AuthService {
       email,
       passwordHash,
       rating: 1500,
+      isBot: false,
     });
 
     // Generate token
