@@ -39,7 +39,7 @@ function navigateTo(path: string) {
           </RouterLink>
 
           <!-- Desktop Navigation -->
-          <nav class="hidden sm:flex items-center gap-6">
+          <nav class="hidden md:flex items-center gap-6">
             <RouterLink to="/learn" class="text-gray-300 hover:text-white transition-colors">
               Learn
             </RouterLink>
@@ -53,7 +53,7 @@ function navigateTo(path: string) {
         </div>
 
         <!-- Right Group - Desktop -->
-        <div class="hidden sm:flex items-center gap-4">
+        <div class="hidden md:flex items-center gap-4">
           <template v-if="isAuthenticated">
             <RouterLink to="/profile" class="text-gray-300 hover:text-white transition-colors">
               {{ username }}
@@ -75,7 +75,7 @@ function navigateTo(path: string) {
         <!-- Mobile Hamburger Menu -->
         <button
           @click="isMenuOpen = !isMenuOpen"
-          class="sm:hidden text-gray-300 hover:text-white transition-colors"
+          class="md:hidden text-gray-300 hover:text-white transition-colors"
           aria-label="Toggle menu"
         >
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,7 +100,7 @@ function navigateTo(path: string) {
       <!-- Mobile Menu -->
       <nav
         v-if="isMenuOpen"
-        class="sm:hidden mt-4 pt-4 border-t border-gray-700 space-y-3"
+        class="md:hidden mt-4 pt-4 border-t border-gray-700 space-y-3"
       >
         <RouterLink
           to="/learn"

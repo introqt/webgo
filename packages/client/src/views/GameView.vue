@@ -148,7 +148,7 @@ watch(gameId, () => {
       </button>
     </div>
 
-    <div v-else class="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 px-4 py-6 lg:px-6 overflow-x-hidden">
+    <div v-else class="flex-1 flex flex-col lg:flex-row gap-2 lg:gap-6 px-2 py-4 lg:px-6 lg:py-6 w-full overflow-x-hidden">
       <!-- Left Sidebar (hidden on mobile) -->
       <div class="hidden lg:block lg:w-[280px] space-y-4 flex-shrink-0">
         <!-- Game info -->
@@ -171,7 +171,7 @@ watch(gameId, () => {
       </div>
 
       <!-- Center Board -->
-      <div class="flex-1 flex justify-center items-start min-w-0">
+      <div class="flex-1 flex justify-center items-start min-w-0 w-full">
         <GoBoard
           :size="boardSize"
           :stones="stones"
@@ -187,7 +187,7 @@ watch(gameId, () => {
       </div>
 
       <!-- Right Sidebar -->
-      <div class="w-full lg:w-[280px] space-y-4 flex-shrink-0">
+      <div class="w-full lg:w-[280px] space-y-2 lg:space-y-4 flex-shrink-0 px-2 lg:px-0">
         <!-- Error message -->
         <div
           v-if="error"

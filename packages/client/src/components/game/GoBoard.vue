@@ -27,18 +27,25 @@ const cellSize = computed(() => {
   const baseSize = props.size;
   const vw = viewportWidth.value;
 
-  // Extra small phones (< 380px) - very compact
-  if (vw < 380) {
-    if (baseSize === 9) return 28;
-    if (baseSize === 13) return 22;
-    return 16;
+  // Extra small phones (< 360px) - very compact
+  if (vw < 360) {
+    if (baseSize === 9) return 20;
+    if (baseSize === 13) return 16;
+    return 12;
   }
 
-  // Small phones (380px - 640px)
+  // Small phones (360px - 480px)
+  if (vw < 480) {
+    if (baseSize === 9) return 24;
+    if (baseSize === 13) return 19;
+    return 15;
+  }
+
+  // Medium phones (480px - 640px)
   if (vw < 640) {
-    if (baseSize === 9) return 36;
-    if (baseSize === 13) return 28;
-    return 22;
+    if (baseSize === 9) return 32;
+    if (baseSize === 13) return 26;
+    return 20;
   }
 
   // Tablets and larger (640px+)
@@ -319,8 +326,9 @@ function getPosition(x: number, y: number) {
   justify-content: center;
   align-items: center;
   width: 100%;
-  max-width: 100%;
-  overflow: auto;
+  max-width: 100vw;
+  overflow: visible;
+  padding: 8px;
 }
 
 .go-board {
@@ -328,16 +336,24 @@ function getPosition(x: number, y: number) {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   max-width: 100%;
   height: auto;
+  display: block;
 }
 
 .fill-board {
   fill: #DEB887;
 }
 
-/* Ensure the SVG is responsive on smaller screens */
-@media (max-width: 640px) {
+/* Mobile optimizations */
+@media (max-width: 768px) {
   .go-board-container {
-    padding: 0;
+    padding: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .go-board-container {
+    padding: 2px;
+    margin: 0 -4px;
   }
 }
 </style>
