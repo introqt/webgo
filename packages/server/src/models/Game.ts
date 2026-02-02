@@ -30,6 +30,7 @@ interface GameRow {
   version: number;
   created_at: Date;
   updated_at: Date;
+  deleted_at: Date | null;
 }
 
 interface MoveRow {
@@ -49,8 +50,8 @@ export class GameRepository {
     const serializedState = GameEngine.serializeGameState(game.gameState);
 
     const { rows } = await query<GameRow>(
-      `INSERT INTO games (id, board_size, black_player_id, white_player_id, game_state, status, handicap, komi, rule_set, invitation_code, winner, win_reason, final_score)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `INSERT INTO games (id, board_size, black_player_id, white_player_id, game_state, status, handicap, komi, rule_set, invitation_code, winner, win_reason, final_score, version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
       [
         game.id,
@@ -66,6 +67,7 @@ export class GameRepository {
         game.winner,
         game.winReason,
         game.finalScore ? JSON.stringify(game.finalScore) : null,
+        game.version,
       ]
     );
 
@@ -82,7 +84,7 @@ export class GameRepository {
 
   async findByInvitationCode(code: string): Promise<Game | null> {
     const { rows } = await query<GameRow>(
-      'SELECT * FROM games WHERE invitation_code = $1',
+      'SELECT * FROM games WHERE invitation_code = $1 AND deleted_at IS NULL',
       [code]
     );
     return rows[0] ? this.mapRowToGame(rows[0]) : null;
@@ -91,7 +93,8 @@ export class GameRepository {
   async findByUserId(userId: string): Promise<Game[]> {
     const { rows } = await query<GameRow>(
       `SELECT * FROM games
-       WHERE black_player_id = $1 OR white_player_id = $1
+       WHERE (black_player_id = $1 OR white_player_id = $1)
+       AND deleted_at IS NULL
        ORDER BY updated_at DESC
        LIMIT 50`,
       [userId]
@@ -112,7 +115,8 @@ export class GameRepository {
        FROM games g
        LEFT JOIN users bu ON g.black_player_id = bu.id
        LEFT JOIN users wu ON g.white_player_id = wu.id
-       WHERE g.black_player_id = $1 OR g.white_player_id = $1
+       WHERE (g.black_player_id = $1 OR g.white_player_id = $1)
+       AND g.deleted_at IS NULL
        ORDER BY g.updated_at DESC
        LIMIT 50`,
       [userId]
@@ -175,6 +179,14 @@ export class GameRepository {
     return result.rowCount !== null && result.rowCount > 0;
   }
 
+  async softDelete(gameId: string): Promise<boolean> {
+    const result = await query(
+      `UPDATE games SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+      [gameId]
+    );
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
   async saveMove(move: Move): Promise<void> {
     await query(
       `INSERT INTO moves (game_id, player_id, move_number, color, position, captured_stones, is_pass)
@@ -217,6 +229,7 @@ export class GameRepository {
       `SELECT COUNT(*) as count FROM games g
        WHERE (g.black_player_id = $1 OR g.white_player_id = $1)
        AND g.status = 'finished'
+       AND g.deleted_at IS NULL
        ${filterClause}`,
       [userId]
     );
@@ -256,6 +269,7 @@ export class GameRepository {
        LEFT JOIN game_rating_changes rc ON rc.game_id = g.id AND rc.user_id = $1
        WHERE (g.black_player_id = $1 OR g.white_player_id = $1)
        AND g.status = 'finished'
+       AND g.deleted_at IS NULL
        ${filterClause}
        ORDER BY g.updated_at DESC
        LIMIT $2 OFFSET $3`,
@@ -322,6 +336,7 @@ export class GameRepository {
       version: row.version,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      deletedAt: row.deleted_at,
     };
   }
 

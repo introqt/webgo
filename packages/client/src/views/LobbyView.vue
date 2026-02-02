@@ -3,10 +3,12 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import type { BoardSize, StoneColor, GameSummary } from '@webgo/shared';
 import { useGameStore } from '@/stores/game';
+import { useAuthStore } from '@/stores/auth';
 import { api } from '@/services/api';
 
 const router = useRouter();
 const gameStore = useGameStore();
+const authStore = useAuthStore();
 
 const boardSize = ref<BoardSize>(19);
 const selectedColor = ref<StoneColor | 'random'>('random');
@@ -15,6 +17,7 @@ const error = ref('');
 const loading = ref(false);
 const myGames = ref<GameSummary[]>([]);
 const loadingGames = ref(false);
+const resigningGameId = ref<string | null>(null);
 
 async function createGame() {
   error.value = '';
@@ -73,6 +76,35 @@ function formatStatus(status: string): string {
     case 'scoring': return 'Scoring';
     case 'finished': return 'Finished';
     default: return status;
+  }
+}
+
+function canResign(game: GameSummary): boolean {
+  if (!authStore.user) return false;
+  const isParticipant = game.blackPlayer?.id === authStore.user.id ||
+                        game.whitePlayer?.id === authStore.user.id;
+  const isNotFinished = game.status !== 'finished';
+  return isParticipant && isNotFinished;
+}
+
+function getResignLabel(game: GameSummary): string {
+  return game.status === 'waiting' ? 'Leave' : 'Resign';
+}
+
+async function handleResign(game: GameSummary) {
+  const label = getResignLabel(game);
+  const confirm = window.confirm(`Are you sure you want to ${label.toLowerCase()} from this game?`);
+  if (!confirm) return;
+
+  resigningGameId.value = game.id;
+  try {
+    await api.post(`/games/${game.id}/resign`);
+    await loadMyGames();
+  } catch (e) {
+    console.error('Failed to resign:', e);
+    error.value = e instanceof Error ? e.message : 'Failed to resign from game';
+  } finally {
+    resigningGameId.value = null;
   }
 }
 
@@ -193,7 +225,7 @@ onMounted(() => {
     </div>
 
     <!-- My Games -->
-    <div class="max-w-4xl mx-auto mt-8">
+    <div class="max-w-6xl mx-auto mt-8">
       <div class="card">
         <h2 class="text-xl font-semibold mb-4">My Games</h2>
 
@@ -205,26 +237,115 @@ onMounted(() => {
           You haven't played any games yet.
         </div>
 
-        <div v-else class="space-y-2">
+        <!-- Desktop table view (lg+) and Mobile card view -->
+        <template v-else>
+          <div class="hidden lg:block overflow-hidden rounded-lg border border-gray-600">
+          <!-- Header -->
+          <div class="grid gap-0 bg-gray-800 border-b border-gray-600 sticky top-0" style="grid-template-columns: 80px 60px 1fr 80px 100px;">
+            <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase">Status</div>
+            <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase">Board</div>
+            <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase">Players</div>
+            <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase">Created</div>
+            <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase">Actions</div>
+          </div>
+
+          <!-- Rows -->
+          <div
+            v-for="(game, index) in myGames"
+            :key="game.id"
+            class="grid gap-0 border-t border-gray-700 hover:bg-gray-800/50 transition-colors"
+            :class="index % 2 === 0 ? 'bg-gray-900/30' : 'bg-gray-800/10'"
+            style="grid-template-columns: 80px 60px 1fr 80px 100px;"
+          >
+            <!-- Status -->
+            <div class="px-3 py-2 flex items-center text-sm">
+              <span
+                :class="[
+                  'px-2 py-0.5 rounded text-xs font-medium',
+                  game.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                  game.status === 'waiting' ? 'bg-yellow-500/20 text-yellow-400' :
+                  game.status === 'scoring' ? 'bg-blue-500/20 text-blue-400' :
+                  'bg-gray-500/20 text-gray-400',
+                ]"
+              >
+                {{ formatStatus(game.status) }}
+              </span>
+            </div>
+
+            <!-- Board Size -->
+            <div class="px-3 py-2 text-sm text-gray-300 flex items-center">
+              {{ game.boardSize }}x{{ game.boardSize }}
+            </div>
+
+            <!-- Players -->
+            <div
+              class="px-3 py-2 text-sm text-gray-300 flex items-center gap-2 cursor-pointer"
+              @click="goToGame(game.id)"
+            >
+              <div class="flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-stone-black"></span>
+                <span class="truncate">{{ game.blackPlayer?.username || 'Waiting' }}</span>
+              </div>
+              <span class="text-gray-500 text-xs">vs</span>
+              <div class="flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-stone-white border border-gray-400"></span>
+                <span class="truncate">{{ game.whitePlayer?.username || 'Waiting' }}</span>
+              </div>
+            </div>
+
+            <!-- Created -->
+            <div class="px-3 py-2 text-sm text-gray-400 flex items-center">
+              {{ new Date(game.createdAt).toLocaleDateString() }}
+            </div>
+
+            <!-- Actions -->
+            <div class="px-3 py-2 flex items-center justify-center gap-2">
+              <button
+                v-if="canResign(game)"
+                @click="handleResign(game)"
+                :disabled="resigningGameId === game.id"
+                :class="[
+                  'px-2 py-0.5 rounded text-xs font-medium transition-colors',
+                  resigningGameId === game.id
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-red-600/30 text-red-400 hover:bg-red-600/50',
+                ]"
+              >
+                {{ resigningGameId === game.id ? '...' : getResignLabel(game) }}
+              </button>
+              <button
+                @click="goToGame(game.id)"
+                class="px-2 py-0.5 rounded text-xs font-medium bg-blue-600/30 text-blue-400 hover:bg-blue-600/50 transition-colors"
+              >
+                View
+              </button>
+            </div>
+          </div>
+          </div>
+
+          <!-- Mobile card view (<lg) -->
+          <div class="lg:hidden space-y-2">
           <div
             v-for="game in myGames"
             :key="game.id"
-            @click="goToGame(game.id)"
-            class="flex items-center justify-between p-3 rounded-lg bg-gray-700/50 hover:bg-gray-700 cursor-pointer transition-colors"
+            class="flex items-center justify-between p-3 rounded-lg bg-gray-700/50 hover:bg-gray-700 transition-colors group"
           >
-            <div class="flex items-center gap-4">
-              <span class="text-gray-400">{{ game.boardSize }}x{{ game.boardSize }}</span>
-              <div class="flex items-center gap-2">
-                <span class="w-3 h-3 rounded-full bg-stone-black"></span>
-                <span>{{ game.blackPlayer?.username || 'Waiting' }}</span>
+            <div
+              class="flex items-center gap-4 flex-1 cursor-pointer"
+              @click="goToGame(game.id)"
+            >
+              <span class="text-gray-400 text-sm">{{ game.boardSize }}x{{ game.boardSize }}</span>
+              <div class="flex items-center gap-1 min-w-0">
+                <span class="w-2 h-2 rounded-full bg-stone-black flex-shrink-0"></span>
+                <span class="truncate text-sm">{{ game.blackPlayer?.username || 'Waiting' }}</span>
               </div>
-              <span class="text-gray-500">vs</span>
-              <div class="flex items-center gap-2">
-                <span class="w-3 h-3 rounded-full bg-stone-white border border-gray-400"></span>
-                <span>{{ game.whitePlayer?.username || 'Waiting' }}</span>
+              <span class="text-gray-500 text-xs flex-shrink-0">vs</span>
+              <div class="flex items-center gap-1 min-w-0">
+                <span class="w-2 h-2 rounded-full bg-stone-white border border-gray-400 flex-shrink-0"></span>
+                <span class="truncate text-sm">{{ game.whitePlayer?.username || 'Waiting' }}</span>
               </div>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 flex-shrink-0 ml-2">
               <span
                 :class="[
                   'px-2 py-1 rounded text-xs font-medium',
@@ -236,12 +357,23 @@ onMounted(() => {
               >
                 {{ formatStatus(game.status) }}
               </span>
-              <span class="text-gray-500 text-sm">
-                {{ new Date(game.createdAt).toLocaleDateString() }}
-              </span>
+              <button
+                v-if="canResign(game)"
+                @click.stop="handleResign(game)"
+                :disabled="resigningGameId === game.id"
+                :class="[
+                  'px-2 py-1 rounded text-xs font-medium transition-colors',
+                  resigningGameId === game.id
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-red-600/30 text-red-400 hover:bg-red-600/50',
+                ]"
+              >
+                {{ resigningGameId === game.id ? '...' : getResignLabel(game) }}
+              </button>
             </div>
           </div>
-        </div>
+          </div>
+        </template>
       </div>
     </div>
   </div>

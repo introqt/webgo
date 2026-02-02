@@ -109,6 +109,14 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_game_rating_changes_game ON game_rating_changes(game_id);
     `,
   },
+  {
+    name: '008_add_deleted_at_to_games',
+    up: `
+      ALTER TABLE games ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+      CREATE INDEX IF NOT EXISTS idx_games_deleted_at ON games(deleted_at) WHERE deleted_at IS NULL;
+      COMMENT ON COLUMN games.deleted_at IS 'Timestamp when game was soft-deleted (NULL = not deleted)';
+    `,
+  },
 ];
 
 async function migrate() {

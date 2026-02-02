@@ -76,6 +76,7 @@ export interface Game {
   version: number; // For optimistic locking
   createdAt: Date;
   updatedAt: Date;
+  deletedAt: Date | null;
 }
 
 export interface GameSummary {

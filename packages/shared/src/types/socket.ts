@@ -87,6 +87,12 @@ export interface GameEndedEvent {
     black: number;
     white: number;
   };
+  blackPlayer: UserPublic | null;
+  whitePlayer: UserPublic | null;
+  ratingChanges: {
+    black: { change: number; newRating: number; oldRating: number } | null;
+    white: { change: number; newRating: number; oldRating: number } | null;
+  } | null;
 }
 
 export interface ScoringStartedEvent {

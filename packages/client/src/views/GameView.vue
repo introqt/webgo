@@ -36,6 +36,8 @@ const blackPlayer = computed(() => gameStore.blackPlayer);
 const whitePlayer = computed(() => gameStore.whitePlayer);
 const winner = computed(() => gameStore.currentGame?.winner ?? null);
 const finalScore = computed(() => gameStore.currentGame?.finalScore ?? null);
+const endReason = computed(() => gameStore.endReason);
+const ratingChanges = computed(() => gameStore.ratingChanges);
 const invitationCode = computed(() => gameStore.currentGame?.invitationCode || '');
 const deadStones = computed(() => gameStore.gameState?.deadStones || []);
 const territory = computed(() => gameStore.gameState?.territory || { black: [], white: [] });
@@ -128,6 +130,10 @@ watch(gameId, () => {
       v-if="showVictoryOverlay && status === 'finished'"
       :winner="winner"
       :final-score="finalScore"
+      :reason="endReason"
+      :black-player="blackPlayer"
+      :white-player="whitePlayer"
+      :rating-changes="ratingChanges"
       @dismiss="dismissVictory"
     />
 
@@ -143,8 +149,29 @@ watch(gameId, () => {
     </div>
 
     <div v-else class="flex flex-col lg:flex-row gap-6">
-      <!-- Main board area -->
-      <div class="flex-1 flex justify-center">
+      <!-- Left Sidebar (hidden on mobile) -->
+      <div class="hidden lg:block lg:w-[280px] space-y-4">
+        <!-- Game info -->
+        <GameInfo
+          :black-player="blackPlayer"
+          :white-player="whitePlayer"
+          :current-turn="currentTurn"
+          :my-color="myColor"
+          :captures="captures"
+          :status="status"
+          :winner="winner"
+          :final-score="finalScore"
+        />
+
+        <!-- Move history -->
+        <MoveHistory
+          :moves="moves"
+          :board-size="boardSize"
+        />
+      </div>
+
+      <!-- Center Board -->
+      <div class="flex-1 flex justify-center items-start">
         <GoBoard
           :size="boardSize"
           :stones="stones"
@@ -159,8 +186,8 @@ watch(gameId, () => {
         />
       </div>
 
-      <!-- Sidebar -->
-      <div class="lg:w-80 space-y-4">
+      <!-- Right Sidebar -->
+      <div class="w-full lg:w-[280px] space-y-4">
         <!-- Error message -->
         <div
           v-if="error"
@@ -169,8 +196,9 @@ watch(gameId, () => {
           {{ error }}
         </div>
 
-        <!-- Game info -->
+        <!-- Game info on mobile -->
         <GameInfo
+          class="lg:hidden"
           :black-player="blackPlayer"
           :white-player="whitePlayer"
           :current-turn="currentTurn"
@@ -206,8 +234,9 @@ watch(gameId, () => {
           </RouterLink>
         </div>
 
-        <!-- Move history -->
+        <!-- Move history on mobile -->
         <MoveHistory
+          class="lg:hidden"
           :moves="moves"
           :board-size="boardSize"
         />
