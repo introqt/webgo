@@ -7,6 +7,10 @@ import { config } from './config/index.js';
 import { testConnection } from './config/database.js';
 import routes from './routes/index.js';
 import { createSocketServer } from './socket/index.js';
+import { UserRepository } from './models/User.js';
+import { GameRepository } from './models/Game.js';
+import { GameService } from './services/game/GameService.js';
+import { BotService } from './services/bot/BotService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,6 +22,13 @@ async function main() {
     console.error('Failed to connect to database. Exiting.');
     process.exit(1);
   }
+
+  // Ensure bot users exist
+  const userRepo = new UserRepository();
+  const gameRepo = new GameRepository();
+  const gameService = new GameService(gameRepo);
+  const botService = new BotService(userRepo, gameRepo, gameService);
+  await botService.createBotUsers();
 
   const app = express();
   const httpServer = createServer(app);
