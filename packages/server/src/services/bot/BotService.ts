@@ -10,6 +10,9 @@ import { pool } from '../../config/database.js';
 import bcrypt from 'bcryptjs';
 import type { Server } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents } from '@webgo/shared';
+import type { ScoreAcceptanceRepository } from '../../models/ScoreAcceptance.js';
+import type { RatingChangeRepository } from '../../models/RatingChange.js';
+import type { AnalyzerService } from '../analyzer/AnalyzerService.js';
 
 export class BotService {
   private io: Server<ClientToServerEvents, ServerToClientEvents> | null = null;
@@ -96,8 +99,8 @@ export class BotService {
     const delay = this.getDelayForDifficulty(player.botDifficulty);
     await new Promise((resolve) => setTimeout(resolve, delay));
 
-    // Select move
-    const movePos = BotEngine.selectMove(game.gameState.board, player.botDifficulty);
+    // Select move - use async method which supports external APIs for hard mode
+    const movePos = await BotEngine.selectMoveAsync(game.gameState.board, player.botDifficulty);
 
     if (movePos) {
       const result = await this.gameService.makeMove(gameId, playerId, movePos);
@@ -148,5 +151,92 @@ export class BotService {
     // Maybe faster for hard bot? Or slower "thinking"?
     // Randomize within range
     return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  /**
+   * Handle bot auto-acceptance of score during scoring phase
+   * Called when a human accepts score in a bot game
+   */
+  async handleBotScoreAcceptance(
+    gameId: string,
+    io: Server<ClientToServerEvents, ServerToClientEvents>,
+    scoreRepo: ScoreAcceptanceRepository,
+    gameService: GameService,
+    userRepo: UserRepository,
+    ratingRepo: RatingChangeRepository,
+    analyzerService: AnalyzerService
+  ): Promise<void> {
+    const game = await this.gameRepo.findById(gameId);
+    if (!game || game.status !== 'scoring') return;
+
+    // Check if either player is a bot
+    const blackPlayer = game.blackPlayerId ? await this.userRepo.findById(game.blackPlayerId) : null;
+    const whitePlayer = game.whitePlayerId ? await this.userRepo.findById(game.whitePlayerId) : null;
+
+    const botPlayer = blackPlayer?.isBot ? blackPlayer : whitePlayer?.isBot ? whitePlayer : null;
+    if (!botPlayer) return;
+
+    // Add a small delay to simulate thinking
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Bot accepts the score
+    await scoreRepo.addAcceptance(gameId, botPlayer.id);
+    console.log(`Bot ${botPlayer.username} auto-accepted score for game ${gameId}`);
+
+    // Check if both players have now accepted
+    const bothAccepted = await scoreRepo.bothPlayersAccepted(
+      gameId,
+      game.blackPlayerId || '',
+      game.whitePlayerId || ''
+    );
+
+    // Notify about bot acceptance
+    io.to(gameId).emit('score_accepted', {
+      acceptedBy: botPlayer.id,
+      bothAccepted,
+    });
+
+    if (bothAccepted) {
+      const result = await gameService.acceptScore(gameId, botPlayer.id);
+
+      if (result.success && result.gameResult) {
+        // Fetch player info and rating changes
+        const blackPlayerInfo = game.blackPlayerId ? await userRepo.getPublicInfo(game.blackPlayerId) : null;
+        const whitePlayerInfo = game.whitePlayerId ? await userRepo.getPublicInfo(game.whitePlayerId) : null;
+        const ratingChanges = await ratingRepo.findByGameId(gameId);
+
+        io.to(gameId).emit('game_ended', {
+          winner: result.gameResult.winner,
+          reason: 'score',
+          finalScore: result.gameResult.finalScore,
+          blackPlayer: blackPlayerInfo,
+          whitePlayer: whitePlayerInfo,
+          ratingChanges: {
+            black: ratingChanges.find(r => r.userId === game.blackPlayerId)
+              ? {
+                  change: ratingChanges.find(r => r.userId === game.blackPlayerId)!.ratingChange,
+                  newRating: ratingChanges.find(r => r.userId === game.blackPlayerId)!.ratingAfter,
+                  oldRating: ratingChanges.find(r => r.userId === game.blackPlayerId)!.ratingBefore,
+                }
+              : null,
+            white: ratingChanges.find(r => r.userId === game.whitePlayerId)
+              ? {
+                  change: ratingChanges.find(r => r.userId === game.whitePlayerId)!.ratingChange,
+                  newRating: ratingChanges.find(r => r.userId === game.whitePlayerId)!.ratingAfter,
+                  oldRating: ratingChanges.find(r => r.userId === game.whitePlayerId)!.ratingBefore,
+                }
+              : null,
+          },
+        });
+
+        // Analyze completed game
+        analyzerService.analyzeCompletedGame(gameId).catch((err) =>
+          console.error('Analysis failed for game', gameId, err)
+        );
+
+        // Clean up
+        await scoreRepo.clearAcceptances(gameId);
+      }
+    }
   }
 }

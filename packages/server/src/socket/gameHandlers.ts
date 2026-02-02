@@ -232,6 +232,12 @@ export function setupGameHandlers(
           io.to(gameId).emit('scoring_started', {
             gameState: result.gameState!,
           });
+
+          // Bot should auto-accept score
+          await botService.handleBotScoreAcceptance(gameId, io, scoreRepo, gameService, userRepo, ratingRepo, analyzerService);
+        } else {
+          // Trigger bot move if it's bot's turn (game still active)
+          await botService.handlePossibleBotTurn(gameId);
         }
       } catch (error) {
         console.error('Error passing turn:', error);
@@ -353,7 +359,10 @@ export function setupGameHandlers(
         // Track acceptance in database
         await scoreRepo.addAcceptance(gameId, user.userId);
 
-        // Check if both players accepted
+        // If opponent is a bot, auto-accept for the bot
+        await botService.handleBotScoreAcceptance(gameId, io, scoreRepo, gameService, userRepo, ratingRepo, analyzerService);
+
+        // Check if both players accepted (including bot auto-accept)
         const bothAccepted = await scoreRepo.bothPlayersAccepted(
           gameId,
           game.blackPlayerId || '',

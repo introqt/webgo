@@ -106,6 +106,7 @@ export class UserRepository {
   async getLeaderboard(limit = 20, offset = 0): Promise<UserPublic[]> {
     const { rows } = await query<{ id: string; username: string; rating: number }>(
       `SELECT id, username, rating FROM users
+       WHERE is_bot = false
        ORDER BY rating DESC, username ASC
        LIMIT $1 OFFSET $2`,
       [limit, offset]
@@ -118,7 +119,7 @@ export class UserRepository {
   }
 
   async getTotalCount(): Promise<number> {
-    const { rows } = await query<{ count: string }>('SELECT COUNT(*) as count FROM users');
+    const { rows } = await query<{ count: string }>('SELECT COUNT(*) as count FROM users WHERE is_bot = false');
     return parseInt(rows[0].count, 10);
   }
 

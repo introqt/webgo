@@ -8,10 +8,79 @@ import {
   BoardSize,
 } from '@webgo/shared';
 import { GameEngine } from '../game/GameEngine.js';
+import type { ExternalBotProvider, ExternalBotConfig } from './ExternalBotProvider.js';
+import { KataGoProvider } from './KataGoProvider.js';
+
+// Singleton external provider
+let externalProvider: ExternalBotProvider | null = null;
 
 export class BotEngine {
   /**
-   * Select a move for the bot based on difficulty
+   * Initialize external bot provider from environment
+   */
+  static initializeExternalProvider(): void {
+    const apiUrl = process.env.EXTERNAL_BOT_API_URL;
+    if (!apiUrl) {
+      console.log('No external bot API configured, using built-in engine');
+      return;
+    }
+
+    const config: ExternalBotConfig = {
+      enabled: true,
+      provider: (process.env.EXTERNAL_BOT_PROVIDER as 'katago' | 'leelazero' | 'custom') || 'katago',
+      apiUrl,
+      apiKey: process.env.EXTERNAL_BOT_API_KEY,
+      timeout: parseInt(process.env.EXTERNAL_BOT_TIMEOUT || '10000', 10),
+    };
+
+    switch (config.provider) {
+      case 'katago':
+        externalProvider = new KataGoProvider(config);
+        console.log(`External bot provider initialized: KataGo at ${apiUrl}`);
+        break;
+      default:
+        console.warn(`Unknown external bot provider: ${config.provider}`);
+    }
+  }
+
+  /**
+   * Check if external provider is available
+   */
+  static hasExternalProvider(): boolean {
+    return externalProvider !== null;
+  }
+
+  /**
+   * Select a move using external API for hard difficulty
+   */
+  static async selectMoveAsync(
+    board: BoardState,
+    difficulty: BotDifficulty
+  ): Promise<Position | null> {
+    // For hard difficulty, try external API first
+    if (difficulty === 'hard' && externalProvider) {
+      try {
+        const externalMove = await externalProvider.selectMove(board);
+        if (externalMove) {
+          // Validate the move is legal
+          const result = GameEngine.makeMove(board, externalMove, board.currentTurn);
+          if (result.valid) {
+            console.log(`External bot (${externalProvider.name}) selected move: ${externalMove.x},${externalMove.y}`);
+            return externalMove;
+          }
+          console.warn(`External bot returned invalid move, falling back to built-in engine`);
+        }
+      } catch (error) {
+        console.error('External bot error, falling back to built-in engine:', error);
+      }
+    }
+
+    // Fall back to built-in engine
+    return this.selectMove(board, difficulty);
+  }
+
+  /**
+   * Select a move for the bot based on difficulty (synchronous, built-in engine only)
    */
   static selectMove(
     board: BoardState,
