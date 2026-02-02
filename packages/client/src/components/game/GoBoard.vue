@@ -20,50 +20,56 @@ const emit = defineEmits<{
 }>();
 
 const hoverPosition = ref<Position | null>(null);
-const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
+const containerRef = ref<HTMLElement | null>(null);
+const containerWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
+let resizeObserver: ResizeObserver | null = null;
+let resizeHandler: (() => void) | null = null;
+
+const MIN_CELL = 12;
+const MAX_CELL = 48;
 
 const cellSize = computed(() => {
-  // Responsive sizing based on board size and viewport width
   const baseSize = props.size;
-  const vw = viewportWidth.value;
+  const cw = containerWidth.value;
 
-  // Extra small phones (< 360px) - very compact
-  if (vw < 360) {
-    if (baseSize === 9) return 20;
-    if (baseSize === 13) return 16;
-    return 12;
+  // Fallback defaults for SSR or unknown widths
+  if (!cw || cw <= 0) {
+    if (baseSize === 9) return 44;
+    if (baseSize === 13) return 36;
+    return 28;
   }
 
-  // Small phones (360px - 480px)
-  if (vw < 480) {
-    if (baseSize === 9) return 24;
-    if (baseSize === 13) return 19;
-    return 15;
-  }
-
-  // Medium phones (480px - 640px)
-  if (vw < 640) {
-    if (baseSize === 9) return 32;
-    if (baseSize === 13) return 26;
-    return 20;
-  }
-
-  // Tablets and larger (640px+)
-  if (baseSize === 9) return 44;
-  if (baseSize === 13) return 36;
-  return 28;
+  // Compute cell size so board fits container: boardWidth ~= (baseSize + 1) * cellSize
+  const candidate = Math.floor(cw / (baseSize + 1));
+  return Math.max(MIN_CELL, Math.min(candidate, MAX_CELL));
 });
 
-function handleResize() {
-  viewportWidth.value = window.innerWidth;
-}
+
 
 onMounted(() => {
-  window.addEventListener('resize', handleResize);
+  // initial measurement
+  containerWidth.value = containerRef.value?.clientWidth || window.innerWidth;
+
+  if (typeof ResizeObserver !== 'undefined' && containerRef.value) {
+    resizeObserver = new ResizeObserver((entries) => {
+      if (entries[0]) containerWidth.value = entries[0].contentRect.width;
+    });
+    resizeObserver.observe(containerRef.value);
+  } else {
+    resizeHandler = () => { containerWidth.value = containerRef.value?.clientWidth || window.innerWidth; };
+    window.addEventListener('resize', resizeHandler);
+  }
 });
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize);
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+  if (resizeHandler) {
+    window.removeEventListener('resize', resizeHandler);
+    resizeHandler = null;
+  }
 });
 
 const boardPadding = computed(() => cellSize.value);
@@ -125,10 +131,10 @@ function getPosition(x: number, y: number) {
 </script>
 
 <template>
-  <div class="go-board-container">
+  <div ref="containerRef" class="go-board-container">
     <svg
-      :width="boardSize"
-      :height="boardSize"
+      :viewBox="`0 0 ${boardSize} ${boardSize}`"
+      preserveAspectRatio="xMidYMid meet"
       class="go-board"
     >
       <!-- Board background -->
@@ -327,7 +333,7 @@ function getPosition(x: number, y: number) {
   align-items: center;
   width: 100%;
   max-width: 100vw;
-  overflow: visible;
+  overflow: hidden;
   padding: 8px;
 }
 
@@ -335,6 +341,7 @@ function getPosition(x: number, y: number) {
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   max-width: 100%;
+  width: 100%;
   height: auto;
   display: block;
 }
@@ -347,6 +354,16 @@ function getPosition(x: number, y: number) {
 @media (max-width: 768px) {
   .go-board-container {
     padding: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .go-board-container {
+    padding: 2px;
+    margin: 0 -4px;
+  }
+  .go-board {
+    width: 100%;
   }
 }
 
