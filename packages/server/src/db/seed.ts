@@ -1,5 +1,9 @@
 import bcrypt from 'bcryptjs';
 import { pool } from '../config/database.js';
+import { UserRepository } from '../models/User.js';
+import { GameRepository } from '../models/Game.js';
+import { GameService } from '../services/game/GameService.js';
+import { BotService } from '../services/bot/BotService.js';
 
 // Test users with predefined ratings for leaderboard testing
 const testUsers = [
@@ -47,6 +51,14 @@ async function seed() {
   console.log('  - alice@example.com / bob@example.com (password: password123)');
   console.log('  - nikita.kolotilo@gmail.com (dj_maniac) / test@test.com (ninja) (password: qweqwe33)');
   console.log('  - player5-player20 (password: password123) - ratings from 800 to 2200');
+
+  // Initialize services for bot creation
+  const userRepo = new UserRepository();
+  const gameRepo = new GameRepository();
+  const gameService = new GameService(gameRepo);
+  const botService = new BotService(userRepo, gameRepo, gameService);
+
+  await botService.createBotUsers();
 
   console.log('Seeding completed');
   await pool.end();

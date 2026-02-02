@@ -39,6 +39,10 @@ export const createGameSchema = z.object({
   ruleSet: z.enum(['chinese', 'japanese']).optional(),
 });
 
+export const createBotGameSchema = createGameSchema.extend({
+  difficulty: z.enum(['easy', 'medium', 'hard']),
+});
+
 export const makeMoveSchema = z.object({
   x: z.number().int().min(0),
   y: z.number().int().min(0),

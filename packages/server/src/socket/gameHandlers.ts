@@ -5,18 +5,27 @@ import type {
   Position,
 } from '@webgo/shared';
 import { GameService } from '../services/game/index.js';
+import { BotService } from '../services/bot/BotService.js';
 import { GameRepository } from '../models/Game.js';
 import { UserRepository } from '../models/User.js';
 import { ScoreAcceptanceRepository } from '../models/ScoreAcceptance.js';
 import { RatingChangeRepository } from '../models/RatingChange.js';
 import { AuthService, TokenPayload } from '../services/auth/index.js';
 import { GameEngine } from '../services/game/GameEngine.js';
+import { LiveAnalysisEngine } from '../services/analyzer/LiveAnalysisEngine.js';
+import { MoveEvaluationRepository } from '../models/MoveEvaluation.js';
+import { GameAnalysisRepository } from '../models/GameAnalysis.js';
+import { AnalyzerService } from '../services/analyzer/AnalyzerService.js';
 
 const gameRepo = new GameRepository();
 const userRepo = new UserRepository();
 const scoreRepo = new ScoreAcceptanceRepository();
 const ratingRepo = new RatingChangeRepository();
+const evalRepo = new MoveEvaluationRepository();
+const analysisRepo = new GameAnalysisRepository();
 const gameService = new GameService(gameRepo);
+const botService = new BotService(userRepo, gameRepo, gameService);
+const analyzerService = new AnalyzerService(gameRepo, analysisRepo);
 const authService = new AuthService(userRepo);
 
 // Socket with user data
@@ -144,6 +153,40 @@ export function setupGameHandlers(
           capturedStones: result.capturedStones || [],
           gameState: result.gameState!,
         });
+
+        // Perform Live Analysis if previous state is available
+        if (result.previousGameState && result.gameState) {
+           try {
+             const previousBoard = GameEngine.deserializeGameState(result.previousGameState).board;
+             const currentBoard = GameEngine.deserializeGameState(result.gameState).board;
+             
+             const analysis = LiveAnalysisEngine.evaluateMove(
+               previousBoard, 
+               currentBoard, 
+               {
+                 color: moveColor,
+                 position: { x, y },
+                 moveNumber: game.gameState.moveHistory.length,
+                 gameId,
+                 playerId: user.userId,
+                 capturedStones: result.capturedStones || [],
+                 createdAt: new Date(),
+                 isPass: false
+               }, 
+               moveColor
+             );
+             
+             await evalRepo.saveEvaluation(gameId, analysis);
+             
+             // Emit evaluation to the player
+             socket.emit('move_evaluated', analysis);
+           } catch (err) {
+             console.error('Error in live analysis:', err);
+           }
+        }
+
+        // Trigger bot move if applicable
+        await botService.handlePossibleBotTurn(gameId);
       } catch (error) {
         console.error('Error making move:', error);
         socket.emit('error', { code: 'MOVE_ERROR', message: 'Failed to make move' });
@@ -240,6 +283,11 @@ export function setupGameHandlers(
               : null,
           },
         });
+
+        // Analyze completed game
+        analyzerService.analyzeCompletedGame(gameId).catch((err) =>
+          console.error('Analysis failed for game', gameId, err)
+        );
 
         // Clean up
         await scoreRepo.clearAcceptances(gameId);
@@ -347,6 +395,11 @@ export function setupGameHandlers(
                   : null,
               },
             });
+
+            // Analyze completed game
+            analyzerService.analyzeCompletedGame(gameId).catch((err) =>
+              console.error('Analysis failed for game', gameId, err)
+            );
 
             // Clean up
             await scoreRepo.clearAcceptances(gameId);

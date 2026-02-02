@@ -4,10 +4,17 @@ import { GameService } from '../services/game/index.js';
 import { GameRepository } from '../models/Game.js';
 import { UserRepository } from '../models/User.js';
 import { GameEngine } from '../services/game/GameEngine.js';
+import { BotService } from '../services/bot/BotService.js';
+import { type BotDifficulty } from '@webgo/shared';
+import { AnalyzerService } from '../services/analyzer/AnalyzerService.js';
+import { GameAnalysisRepository } from '../models/GameAnalysis.js';
 
 const gameRepo = new GameRepository();
 const userRepo = new UserRepository();
+const analysisRepo = new GameAnalysisRepository();
 const gameService = new GameService(gameRepo);
+const botService = new BotService(userRepo, gameRepo, gameService);
+const analyzerService = new AnalyzerService(gameRepo, analysisRepo);
 
 export async function createGame(req: Request, res: Response): Promise<void> {
   try {
@@ -215,9 +222,88 @@ export async function resign(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Trigger analysis
+    analyzerService.analyzeCompletedGame(gameId).catch(console.error);
+
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to resign';
+    res.status(500).json({ error: message });
+  }
+}
+
+export async function createVsBot(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { boardSize, difficulty, color, handicap, komi, ruleSet } = req.body;
+
+    // Find bot user
+    const botUser = await botService.getBotByDifficulty(difficulty);
+    if (!botUser) {
+      res.status(400).json({ error: 'Invalid difficulty' });
+      return;
+    }
+
+    // Create game with human as creator
+    const game = await gameService.createGame({
+      boardSize,
+      creatorId: req.user.userId,
+      creatorColor: color, // 'black' or 'white' or undefined (random)
+      handicap,
+      komi,
+      ruleSet,
+    });
+
+    // Determine which slot is empty and assign bot
+    if (!game.blackPlayerId) {
+      game.blackPlayerId = botUser.id;
+    } else if (!game.whitePlayerId) {
+      game.whitePlayerId = botUser.id;
+    }
+
+    game.status = 'active'; // Start game immediately
+    game.updatedAt = new Date();
+    await gameRepo.update(game);
+
+    // Trigger bot if it's their turn
+    botService.handlePossibleBotTurn(game.id).catch(console.error);
+
+    res.status(201).json({
+      game: {
+        ...game,
+        gameState: GameEngine.serializeGameState(game.gameState),
+      },
+      botPlayer: {
+        id: botUser.id,
+        username: botUser.username,
+        rating: botUser.rating,
+        isBot: true,
+        botDifficulty: difficulty,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create game';
+    res.status(400).json({ error: message });
+  }
+}
+
+export async function getAnalysis(req: Request, res: Response): Promise<void> {
+  try {
+    const { gameId, playerId } = req.params;
+    const analysis = await analyzerService.getGameAnalysis(gameId, playerId);
+
+    if (!analysis) {
+      res.status(404).json({ error: 'Analysis not found' });
+      return;
+    }
+
+    res.json(analysis);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to get analysis';
     res.status(500).json({ error: message });
   }
 }

@@ -1,0 +1,48 @@
+{
+  "19": {
+    "star_point": {
+      "moves": [{"x": 3, "y": 3}, {"x": 15, "y": 15}, {"x": 3, "y": 15}, {"x": 15, "y": 3}],
+      "description": "Star point (hoshi) - Influence oriented",
+      "quality": "excellent"
+    },
+    "3_4_point": {
+      "moves": [{"x": 2, "y": 3}, {"x": 3, "y": 2}, {"x": 16, "y": 3}, {"x": 15, "y": 2}, {"x": 2, "y": 15}, {"x": 3, "y": 16}, {"x": 16, "y": 15}, {"x": 15, "y": 16}],
+      "description": "3-4 point (komoku) - Balance of territory and influence",
+      "quality": "excellent"
+    },
+    "3_3_point": {
+      "moves": [{"x": 2, "y": 2}, {"x": 16, "y": 16}, {"x": 2, "y": 16}, {"x": 16, "y": 2}],
+      "description": "3-3 point (san-san) - Territory oriented",
+      "quality": "good"
+    }
+  },
+  "13": {
+    "star_point": {
+      "moves": [{"x": 3, "y": 3}, {"x": 9, "y": 9}, {"x": 3, "y": 9}, {"x": 9, "y": 3}],
+      "description": "Star point",
+      "quality": "excellent"
+    },
+    "3_3_point": {
+      "moves": [{"x": 2, "y": 2}, {"x": 10, "y": 10}, {"x": 2, "y": 10}, {"x": 10, "y": 2}],
+      "description": "3-3 point",
+      "quality": "good"
+    }
+  },
+  "9": {
+    "tengen": {
+        "moves": [{"x": 4, "y": 4}],
+        "description": "Center (Tengen) - Powerful on 9x9",
+        "quality": "excellent"
+    },
+    "3_3_point": {
+      "moves": [{"x": 2, "y": 2}, {"x": 6, "y": 6}, {"x": 2, "y": 6}, {"x": 6, "y": 2}],
+      "description": "3-3 point - Standard corner",
+      "quality": "excellent"
+    },
+    "4_3_point": {
+        "moves": [{"x": 3, "y": 2}, {"x": 2, "y": 3}, {"x": 5, "y": 2}, {"x": 6, "y": 3}, {"x": 3, "y": 6}, {"x": 2, "y": 5}, {"x": 5, "y": 6}, {"x": 6, "y": 5}],
+        "description": "4-3 point",
+        "quality": "good"
+    }
+  }
+}

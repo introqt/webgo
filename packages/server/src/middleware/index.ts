@@ -4,6 +4,7 @@ export {
   registerSchema,
   loginSchema,
   createGameSchema,
+  createBotGameSchema,
   makeMoveSchema,
   markDeadStonesSchema,
 } from './validation.js';

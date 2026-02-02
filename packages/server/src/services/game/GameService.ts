@@ -32,6 +32,7 @@ export interface MakeMoveResult {
   error?: string;
   capturedStones?: Position[];
   gameState?: SerializedGameState;
+  previousGameState?: SerializedGameState;
   gameEnded?: boolean;
   gameResult?: GameResult;
 }
@@ -222,6 +223,8 @@ export class GameService {
         return { success: false, error: 'Not your turn' };
       }
 
+      const previousGameState = GameEngine.serializeGameState(game.gameState);
+
       // Attempt the move
       const result = GameEngine.makeMove(game.gameState.board, position, playerColor);
       if (!result.valid) {
@@ -256,6 +259,7 @@ export class GameService {
         success: true,
         capturedStones: result.capturedStones,
         gameState: GameEngine.serializeGameState(game.gameState),
+        previousGameState,
       };
     });
   }
