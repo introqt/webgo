@@ -111,6 +111,7 @@ export class GameService {
       version: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
+      deletedAt: null,
     };
 
     await this.gameRepo.create(game);
@@ -339,13 +340,26 @@ export class GameService {
       return { success: false, error: 'Game not found' };
     }
 
-    if (game.status !== 'active' && game.status !== 'scoring') {
-      return { success: false, error: 'Cannot resign from this game' };
-    }
-
     const playerColor = this.getPlayerColor(game, playerId);
     if (!playerColor) {
       return { success: false, error: 'Player not in game' };
+    }
+
+    // Handle waiting games: soft delete instead of resign
+    if (game.status === 'waiting') {
+      const deleted = await this.gameRepo.softDelete(gameId);
+      if (!deleted) {
+        return { success: false, error: 'Failed to leave game' };
+      }
+      return {
+        success: true,
+        gameState: GameEngine.serializeGameState(game.gameState),
+      };
+    }
+
+    // Original resign logic for active/scoring games
+    if (game.status !== 'active' && game.status !== 'scoring') {
+      return { success: false, error: 'Cannot resign from this game' };
     }
 
     // End the game
