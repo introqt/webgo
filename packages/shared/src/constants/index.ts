@@ -79,4 +79,5 @@ export const SOCKET_EVENTS = {
   SCORE_ACCEPTED: 'score_accepted',
   ERROR: 'error',
   INVALID_MOVE: 'invalid_move',
+  MOVE_EVALUATED: 'move_evaluated',
 } as const;

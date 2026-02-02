@@ -5,12 +5,16 @@ export interface User {
   passwordHash?: string;
   rating: number;
   createdAt: Date;
+  isBot: boolean;
+  botDifficulty?: 'easy' | 'medium' | 'hard';
 }
 
 export interface UserPublic {
   id: string;
   username: string;
   rating: number;
+  isBot?: boolean;
+  botDifficulty?: 'easy' | 'medium' | 'hard';
 }
 
 export interface UserStats {

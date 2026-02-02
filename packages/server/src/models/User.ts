@@ -7,16 +7,18 @@ interface UserRow {
   email: string;
   password_hash: string;
   rating: number;
+  is_bot: boolean;
+  bot_difficulty: 'easy' | 'medium' | 'hard' | null;
   created_at: Date;
 }
 
 export class UserRepository {
   async create(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
     const { rows } = await query<UserRow>(
-      `INSERT INTO users (username, email, password_hash, rating)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO users (username, email, password_hash, rating, is_bot, bot_difficulty)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [user.username, user.email, user.passwordHash, user.rating || 1500]
+      [user.username, user.email, user.passwordHash, user.rating || 1500, user.isBot || false, user.botDifficulty || null]
     );
 
     return this.mapRowToUser(rows[0]);
@@ -127,6 +129,8 @@ export class UserRepository {
       email: row.email,
       passwordHash: row.password_hash,
       rating: row.rating,
+      isBot: row.is_bot || false,
+      botDifficulty: row.bot_difficulty || undefined,
       createdAt: row.created_at,
     };
   }

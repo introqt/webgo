@@ -117,6 +117,52 @@ const migrations = [
       COMMENT ON COLUMN games.deleted_at IS 'Timestamp when game was soft-deleted (NULL = not deleted)';
     `,
   },
+  {
+    name: '009_add_bot_support',
+    up: `
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_difficulty VARCHAR(20);
+      CREATE INDEX IF NOT EXISTS idx_users_is_bot ON users(is_bot);
+      ALTER TABLE users ADD CONSTRAINT chk_bot_difficulty
+        CHECK (is_bot = FALSE OR (is_bot = TRUE AND bot_difficulty IS NOT NULL));
+    `,
+  },
+  {
+    name: '010_create_game_analysis',
+    up: `
+      CREATE TABLE IF NOT EXISTS game_analyses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        game_id UUID REFERENCES games(id) ON DELETE CASCADE,
+        player_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        total_moves INTEGER,
+        average_move_time_ms INTEGER,
+        stones_captured INTEGER,
+        stones_lost INTEGER,
+        capture_opportunities_missed INTEGER,
+        blunders INTEGER,
+        missed_captures INTEGER,
+        bad_atari_escapes INTEGER,
+        endgame_efficiency DECIMAL(5,2),
+        opening_quality VARCHAR(20),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(game_id, player_id)
+      );
+      
+      CREATE TABLE IF NOT EXISTS move_evaluations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        game_id UUID REFERENCES games(id) ON DELETE CASCADE,
+        move_number INTEGER,
+        quality VARCHAR(20),
+        score INTEGER,
+        is_blunder BOOLEAN,
+        is_missed_capture BOOLEAN,
+        evaluation_reason TEXT,
+        suggested_position JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(game_id, move_number)
+      );
+    `,
+  },
 ];
 
 async function migrate() {

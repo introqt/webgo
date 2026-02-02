@@ -1,5 +1,6 @@
 import type { Position, StoneColor, SerializedGame, SerializedGameState } from './game.js';
 import type { UserPublic } from './user.js';
+import type { MoveQualityEvaluation } from './analysis.js';
 
 // Client to Server Events
 export interface ClientToServerEvents {
@@ -41,6 +42,7 @@ export interface ServerToClientEvents {
   // Errors
   error: (data: SocketError) => void;
   invalid_move: (data: InvalidMoveEvent) => void;
+  move_evaluated: (data: MoveQualityEvaluation) => void;
 }
 
 // Event payloads
