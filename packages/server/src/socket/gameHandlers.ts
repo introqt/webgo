@@ -47,6 +47,9 @@ async function isGameParticipant(gameId: string, userId: string): Promise<boolea
 export function setupGameHandlers(
   io: Server<ClientToServerEvents, ServerToClientEvents>
 ): void {
+  // Set the Socket.io server on the BotService for broadcasting bot moves
+  botService.setSocketServer(io);
+
   // Authentication middleware
   io.use(async (socket: AuthenticatedSocket, next) => {
     const token = socket.handshake.auth.token as string | undefined;

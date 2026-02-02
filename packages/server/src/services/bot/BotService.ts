@@ -4,16 +4,28 @@ import { UserRepository } from '../../models/User.js';
 import { GameRepository } from '../../models/Game.js';
 import { GameService } from '../game/GameService.js';
 import { BotEngine } from './BotEngine.js';
+import { GameEngine } from '../game/GameEngine.js';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../../config/database.js';
 import bcrypt from 'bcryptjs';
+import type { Server } from 'socket.io';
+import type { ClientToServerEvents, ServerToClientEvents } from '@webgo/shared';
 
 export class BotService {
+  private io: Server<ClientToServerEvents, ServerToClientEvents> | null = null;
+
   constructor(
     private userRepo: UserRepository,
     private gameRepo: GameRepository,
     private gameService: GameService
   ) {}
+
+  /**
+   * Set the Socket.io server instance for broadcasting bot moves
+   */
+  setSocketServer(io: Server<ClientToServerEvents, ServerToClientEvents>): void {
+    this.io = io;
+  }
 
   /**
    * Create bot users if they don't exist
@@ -88,10 +100,45 @@ export class BotService {
     const movePos = BotEngine.selectMove(game.gameState.board, player.botDifficulty);
 
     if (movePos) {
-      await this.gameService.makeMove(gameId, playerId, movePos);
+      const result = await this.gameService.makeMove(gameId, playerId, movePos);
+
+      if (result.success && this.io) {
+        // Fetch updated game state
+        const updatedGame = await this.gameRepo.findById(gameId);
+        if (updatedGame) {
+          // Broadcast bot move to all clients in the room
+          this.io.to(gameId).emit('move_made', {
+            move: {
+              color: currentTurnColor,
+              position: { x: movePos.x, y: movePos.y },
+              moveNumber: updatedGame.gameState.moveHistory.length,
+            },
+            capturedStones: result.capturedStones || [],
+            gameState: GameEngine.serializeGameState(updatedGame.gameState),
+          });
+        }
+      }
     } else {
       // Pass if no valid moves (should be rare/endgame)
-      await this.gameService.passTurn(gameId, playerId);
+      const result = await this.gameService.passTurn(gameId, playerId);
+
+      if (result.success && this.io) {
+        const updatedGame = await this.gameRepo.findById(gameId);
+        if (updatedGame) {
+          this.io.to(gameId).emit('turn_passed', {
+            color: currentTurnColor,
+            consecutivePasses: updatedGame.gameState.board.consecutivePasses,
+            gameState: GameEngine.serializeGameState(updatedGame.gameState),
+          });
+
+          // Check if scoring phase started
+          if (updatedGame.status === 'scoring') {
+            this.io.to(gameId).emit('scoring_started', {
+              gameState: GameEngine.serializeGameState(updatedGame.gameState),
+            });
+          }
+        }
+      }
     }
   }
 
